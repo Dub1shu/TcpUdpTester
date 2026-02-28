@@ -101,14 +101,16 @@ public sealed class SendOptions
     bool RepeatEnabled;       // リピート送信有効
     int  RepeatCount;         // リピート回数 (default 1)
     int  RepeatIntervalMs;    // リピート間隔 ms (default 1000)
-    int  BurstCount;          // バースト回数 (default 1)
     bool SplitEnabled;        // 分割送信有効
     int  SplitFixedSize;      // 固定分割サイズ bytes (default 64)
-    bool SplitRandom;         // ランダム分割モード
+    bool SplitRandom;         // ランダム分割モード (チャンクサイズをランダム化)
     int  SplitRandomMaxSize;  // ランダム分割の最大サイズ (default 128)
     int  InterChunkDelayMs;   // チャンク間ディレイ ms
 }
 ```
+
+**注意**: `SendMode.Random`・`SeqSuffix`・`LoadTest` は `SendViewModel` の上位ロジックで処理され、
+`SendOptions` には含まれない。`NetService.SendAsync()` には分割後の1パケット分データが渡される。
 
 ### SendRequest
 
@@ -123,13 +125,36 @@ public sealed record SendRequest(
 
 ---
 
+## SeqChecker (Core/SeqChecker.cs)
+
+受信データ末尾の ASCII 10進連番を検査し、欠落を検出するユーティリティクラス。
+
+```csharp
+public sealed class SeqChecker
+{
+    // sessionKey → 直前の連番 (ConcurrentDictionary)
+    SeqGapResult? Check(string sessionKey, byte[] data, int digitCount);
+    void ResetSession(string sessionKey);
+    void Reset();  // 全セッションクリア
+}
+
+public sealed record SeqGapResult(long LastSeq, long Expected, long Actual, long GapCount);
+```
+
+- `sessionKey` = `"{Protocol}:{SessionId}:{Remote}"`
+- 初回受信時はベースラインを記録して `null` を返す
+- ラップアラウンド境界: `modulo = 10^digitCount` (例: 4桁 → 10000)
+- `GapCount = (actual - expected + modulo) % modulo`
+
+---
+
 ## Enums
 
 ```csharp
 public enum Protocol  { TCP, UDP }
-public enum Direction { TX, RX }
+public enum Direction { TX, RX, Gap }   // Gap = 連番欠落検出の擬似エントリ
 public enum ChunkMode { Raw, Delimiter, FixedLength, TimeSlice, Line }
-public enum SendMode  { Text, Hex, File }   // SendViewModel 内で定義
+public enum SendMode  { Text, Hex, File, Random }   // SendViewModel 内で定義
 ```
 
 ---
@@ -149,5 +174,9 @@ public enum SendMode  { Text, Hex, File }   // SendViewModel 内で定義
 | Send | SendMode, SendTextInput, SendHexInput, SendFilePath |
 | Repeat | RepeatEnabled, RepeatCount(1), RepeatIntervalMs(1000) |
 | Split | SplitEnabled, SplitFixedSize(64), SplitRandom, SplitRandomMaxSize(128), InterChunkDelayMs |
+| Random | RandomMinSize(1), RandomMaxSize(256) |
+| SeqSuffix | SeqSuffixEnabled, SeqSuffixDigits(4) |
+| LoadTest | LoadTestEnabled, LoadTestDurationSec(10), LoadTestTargetMbps(0=無制限) |
+| SeqCheck | SeqCheckEnabled, SeqCheckDigits(4) |
 
 設定ファイルパス: `%APPDATA%\NetTestConsole\settings.json`
