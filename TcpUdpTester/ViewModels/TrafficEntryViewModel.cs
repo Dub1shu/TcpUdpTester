@@ -10,7 +10,7 @@ public sealed class TrafficEntryViewModel
     public TrafficEntryViewModel(LogEntry entry) => _entry = entry;
 
     public string Time      => _entry.Timestamp.LocalDateTime.ToString("HH:mm:ss.fff");
-    public string Direction => _entry.Direction.ToString();
+    public string Direction => _entry.Direction == Models.Direction.Gap ? "GAP" : _entry.Direction.ToString();
     public string Protocol  => _entry.Protocol.ToString();
     public string Session   => _entry.SessionId;
     public string Remote    => _entry.Remote;
@@ -19,8 +19,10 @@ public sealed class TrafficEntryViewModel
     /// <summary>16進+ASCII の複数行ダンプ文字列</summary>
     public string HexDump   => BuildHexDump(_entry.Data);
 
-    /// <summary>1行ASCII表示 (表示不可文字は '.')</summary>
-    public string AsciiView => BuildAscii(_entry.Data);
+    /// <summary>1行ASCII表示 (表示不可文字は '.'。GAPエントリはUTF-8デコード)</summary>
+    public string AsciiView => _entry.Direction == Models.Direction.Gap
+        ? Encoding.UTF8.GetString(_entry.Data)
+        : BuildAscii(_entry.Data);
 
     public Direction DirectionEnum => _entry.Direction;
 

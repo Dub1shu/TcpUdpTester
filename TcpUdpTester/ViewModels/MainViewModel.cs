@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Text;
 using System.Windows;
 using TcpUdpTester.Core;
 using TcpUdpTester.Models;
@@ -11,6 +12,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private readonly INetService _net;
     private readonly BinaryLogWriter _logWriter;
     private readonly IDisposable _logSub, _statsSub, _stateSub;
+    private readonly SeqChecker _seqChecker = new();
 
     private string _stateText  = "Ready";
     private long   _txBytes, _rxBytes, _txCount, _rxCount, _errorCount;
@@ -22,8 +24,12 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private string _filterText = "";
     private bool   _filterTx   = true;
     private bool   _filterRx   = true;
+    private bool   _filterGap  = true;
     private TrafficEntryViewModel? _selectedEntry;
     private int    _selectedTabIndex;
+    private bool   _seqCheckEnabled;
+    private int    _seqCheckDigits = 4;
+    private long   _seqGapCount;
 
     public MainViewModel()
     {
@@ -103,6 +109,11 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         get => _filterRx;
         set { Set(ref _filterRx, value); ApplyFilter(); }
     }
+    public bool FilterGap
+    {
+        get => _filterGap;
+        set { Set(ref _filterGap, value); ApplyFilter(); }
+    }
 
     // --- Tab ---
     public int SelectedTabIndex
@@ -118,6 +129,23 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    // --- Seq Check ---
+    public bool IsSeqCheckEnabled
+    {
+        get => _seqCheckEnabled;
+        set { Set(ref _seqCheckEnabled, value); if (!value) _seqChecker.Reset(); }
+    }
+    public int SeqCheckDigits
+    {
+        get => _seqCheckDigits;
+        set => Set(ref _seqCheckDigits, Math.Clamp(value, 1, 10));
+    }
+    public long SeqGapCount
+    {
+        get => _seqGapCount;
+        set => Set(ref _seqGapCount, value);
+    }
+
     // --- Commands ---
     public RelayCommand ClearCommand  { get; }
     public RelayCommand ExportCommand { get; }
@@ -130,16 +158,40 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         _logWriter.Enqueue(entry);
         Application.Current?.Dispatcher.InvokeAsync(() =>
         {
-            var vm = new TrafficEntryViewModel(entry);
-            TrafficLog.Add(vm);
-            if (TrafficLog.Count > 10_000) TrafficLog.RemoveAt(0);
+            AddToTraffic(new TrafficEntryViewModel(entry));
 
-            if (Matches(vm))
+            // 受信データ連番検査
+            if (IsSeqCheckEnabled && entry.Direction == Direction.RX)
             {
-                FilteredLog.Add(vm);
-                if (FilteredLog.Count > 10_000) FilteredLog.RemoveAt(0);
+                var sessionKey = $"{entry.Protocol}:{entry.SessionId}:{entry.Remote}";
+                var result = _seqChecker.Check(sessionKey, entry.Data, SeqCheckDigits);
+                if (result != null)
+                {
+                    SeqGapCount++;
+                    var fmt = $"D{SeqCheckDigits}";
+                    var msg = $"[連番欠落] 期待={result.Expected.ToString(fmt)}" +
+                              $" 実際={result.Actual.ToString(fmt)}" +
+                              $" 欠落数={result.GapCount}";
+                    var gapEntry = new LogEntry(
+                        DateTimeOffset.Now, entry.Protocol, Direction.Gap,
+                        entry.SessionId, entry.Remote,
+                        msg.Length, Encoding.UTF8.GetBytes(msg));
+                    AddToTraffic(new TrafficEntryViewModel(gapEntry));
+                }
             }
         });
+    }
+
+    private void AddToTraffic(TrafficEntryViewModel vm)
+    {
+        TrafficLog.Add(vm);
+        if (TrafficLog.Count > 10_000) TrafficLog.RemoveAt(0);
+
+        if (Matches(vm))
+        {
+            FilteredLog.Add(vm);
+            if (FilteredLog.Count > 10_000) FilteredLog.RemoveAt(0);
+        }
     }
 
     private void OnStats(StatsSnapshot s)
@@ -169,9 +221,12 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     private bool Matches(TrafficEntryViewModel vm)
     {
-        if (!FilterTx && vm.DirectionEnum == Direction.TX) return false;
-        if (!FilterRx && vm.DirectionEnum == Direction.RX) return false;
-        if (!string.IsNullOrEmpty(FilterText) &&
+        if (!FilterGap && vm.DirectionEnum == Direction.Gap) return false;
+        if (!FilterTx  && vm.DirectionEnum == Direction.TX)  return false;
+        if (!FilterRx  && vm.DirectionEnum == Direction.RX)  return false;
+        // Gap エントリはテキストフィルタを適用しない（欠落メッセージは常に表示）
+        if (vm.DirectionEnum != Direction.Gap &&
+            !string.IsNullOrEmpty(FilterText) &&
             !vm.Remote.Contains(FilterText, StringComparison.OrdinalIgnoreCase) &&
             !vm.Session.Contains(FilterText, StringComparison.OrdinalIgnoreCase) &&
             !vm.AsciiView.Contains(FilterText, StringComparison.OrdinalIgnoreCase))
@@ -191,6 +246,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         TrafficLog.Clear();
         FilteredLog.Clear();
         SelectedEntry = null;
+        SeqGapCount = 0;
+        _seqChecker.Reset();
     }
 
     private void ExportLogs()
@@ -249,6 +306,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         SendVm.LoadTestEnabled    = s.LoadTestEnabled;
         SendVm.LoadTestDurationSec= s.LoadTestDurationSec;
         SendVm.LoadTestTargetMbps = s.LoadTestTargetMbps;
+
+        IsSeqCheckEnabled = s.SeqCheckEnabled;
+        SeqCheckDigits    = s.SeqCheckDigits;
     }
 
     public Core.AppSettings CaptureSettings() => new()
@@ -288,6 +348,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         LoadTestEnabled     = SendVm.LoadTestEnabled,
         LoadTestDurationSec = SendVm.LoadTestDurationSec,
         LoadTestTargetMbps  = SendVm.LoadTestTargetMbps,
+        SeqCheckEnabled     = IsSeqCheckEnabled,
+        SeqCheckDigits      = SeqCheckDigits,
     };
 
     public void Dispose()

@@ -54,4 +54,8 @@ public sealed class AppSettings
     public bool     LoadTestEnabled    { get; set; }
     public int      LoadTestDurationSec{ get; set; } = 10;
     public double   LoadTestTargetMbps { get; set; }
+
+    // Receive sequence check
+    public bool SeqCheckEnabled { get; set; }
+    public int  SeqCheckDigits  { get; set; } = 4;
 }
