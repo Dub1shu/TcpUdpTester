@@ -416,6 +416,8 @@
                                  FontFamily="Consolas" FontSize="11"
                                  VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto"
+                                 VerticalContentAlignment="Top"
+                                 HorizontalContentAlignment="Left"
                                  Visibility="{Binding SendVm.SendMode,
                                      Converter={StaticResource ModeToVisibility},
                                      ConverterParameter=Text}"/>
@@ -427,6 +429,8 @@
                                  FontFamily="Consolas" FontSize="11"
                                  VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto"
+                                 VerticalContentAlignment="Top"
+                                 HorizontalContentAlignment="Left"
                                  ToolTip="例: 0A 1B 2C  または  0A,1B,2C"
                                  Visibility="{Binding SendVm.SendMode,
                                      Converter={StaticResource ModeToVisibility},
@@ -449,77 +453,83 @@
                     <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"
                                   Background="#DDD" ResizeDirection="Columns"/>
 
-                    <!-- Right: Options + Send Button -->
+                    <!-- Right: Send Button + Options -->
                     <Grid Grid.Column="2">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Repeat Options -->
-                        <GroupBox Grid.Row="0" Header="繰り返し送信" Padding="4,2">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition/>
-                                    <RowDefinition/>
-                                    <RowDefinition/>
-                                </Grid.RowDefinitions>
-                                <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
-                                          Content="繰り返し有効" IsChecked="{Binding SendVm.RepeatEnabled}"/>
-                                <Label Grid.Row="1" Grid.Column="0" Content="回数:"/>
-                                <TextBox Grid.Row="1" Grid.Column="1"
-                                         Text="{Binding SendVm.RepeatCount}"
-                                         IsEnabled="{Binding SendVm.RepeatEnabled}"/>
-                                <Label Grid.Row="2" Grid.Column="0" Content="間隔(ms):"/>
-                                <TextBox Grid.Row="2" Grid.Column="1"
-                                         Text="{Binding SendVm.RepeatIntervalMs}"
-                                         IsEnabled="{Binding SendVm.RepeatEnabled}"/>
-                            </Grid>
-                        </GroupBox>
-
-                        <!-- Split Options -->
-                        <GroupBox Grid.Row="1" Header="分割送信" Padding="4,2">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition/>
-                                    <RowDefinition/>
-                                    <RowDefinition/>
-                                    <RowDefinition/>
-                                </Grid.RowDefinitions>
-                                <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
-                                          Content="分割有効" IsChecked="{Binding SendVm.SplitEnabled}"/>
-                                <Label Grid.Row="1" Grid.Column="0" Content="固定サイズ:"/>
-                                <TextBox Grid.Row="1" Grid.Column="1"
-                                         Text="{Binding SendVm.SplitFixedSize}"
-                                         IsEnabled="{Binding SendVm.SplitEnabled}"/>
-                                <CheckBox Grid.Row="2" Grid.ColumnSpan="2"
-                                          Content="ランダムサイズ"
-                                          IsChecked="{Binding SendVm.SplitRandom}"
-                                          IsEnabled="{Binding SendVm.SplitEnabled}"/>
-                                <Label Grid.Row="3" Grid.Column="0" Content="遅延(ms):"/>
-                                <TextBox Grid.Row="3" Grid.Column="1"
-                                         Text="{Binding SendVm.InterChunkDelayMs}"
-                                         IsEnabled="{Binding SendVm.SplitEnabled}"/>
-                            </Grid>
-                        </GroupBox>
-
-                        <!-- Send Button + Status -->
-                        <StackPanel Grid.Row="2" VerticalAlignment="Center">
+                        <!-- Send Button + Status (always visible) -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4,4">
                             <Button Content="送 信" Command="{Binding SendVm.SendCommand}"
-                                    FontSize="14" FontWeight="Bold" Height="38" Margin="8,4"/>
+                                    FontSize="10" FontWeight="Bold" Height="20" Width="90" Margin="4,0"/>
                             <TextBlock Text="{Binding SendVm.SendStatus}"
-                                       HorizontalAlignment="Center"
-                                       Foreground="Gray" FontSize="10" Margin="4,2"/>
+                                       VerticalAlignment="Center"
+                                       Foreground="Gray" FontSize="10" Margin="6,0"/>
                         </StackPanel>
+
+                        <!-- Scrollable Options -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+
+                                <!-- Repeat Options -->
+                                <GroupBox Header="繰り返し送信" Padding="4,2">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+                                        <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
+                                                  Content="繰り返し有効" IsChecked="{Binding SendVm.RepeatEnabled}"/>
+                                        <Label Grid.Row="1" Grid.Column="0" Content="回数:"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                 Text="{Binding SendVm.RepeatCount}"
+                                                 IsEnabled="{Binding SendVm.RepeatEnabled}"/>
+                                        <Label Grid.Row="2" Grid.Column="0" Content="間隔(ms):"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1"
+                                                 Text="{Binding SendVm.RepeatIntervalMs}"
+                                                 IsEnabled="{Binding SendVm.RepeatEnabled}"/>
+                                    </Grid>
+                                </GroupBox>
+
+                                <!-- Split Options -->
+                                <GroupBox Header="分割送信" Padding="4,2">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                            <RowDefinition/>
+                                        </Grid.RowDefinitions>
+                                        <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
+                                                  Content="分割有効" IsChecked="{Binding SendVm.SplitEnabled}"/>
+                                        <Label Grid.Row="1" Grid.Column="0" Content="固定サイズ:"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                 Text="{Binding SendVm.SplitFixedSize}"
+                                                 IsEnabled="{Binding SendVm.SplitEnabled}"/>
+                                        <CheckBox Grid.Row="2" Grid.ColumnSpan="2"
+                                                  Content="ランダムサイズ"
+                                                  IsChecked="{Binding SendVm.SplitRandom}"
+                                                  IsEnabled="{Binding SendVm.SplitEnabled}"/>
+                                        <Label Grid.Row="3" Grid.Column="0" Content="遅延(ms):"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1"
+                                                 Text="{Binding SendVm.InterChunkDelayMs}"
+                                                 IsEnabled="{Binding SendVm.SplitEnabled}"/>
+                                    </Grid>
+                                </GroupBox>
+
+                            </StackPanel>
+                        </ScrollViewer>
                     </Grid>
                 </Grid>
             </GroupBox>

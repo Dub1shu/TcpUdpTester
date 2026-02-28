@@ -39,6 +39,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         _statsSub = _net.StatsStream.Subscribe(OnStats);
         _stateSub = _net.StateStream.Subscribe(OnState);
 
+        // TCP Server のセッション選択を SendVm.TargetId に自動連携
+        TcpServerVm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TcpServerViewModel.SelectedSession) && SelectedTabIndex == 1)
+                SendVm.TargetId = TcpServerVm.SelectedSession ?? "";
+        };
+
         ClearCommand  = new RelayCommand(ClearTraffic);
         ExportCommand = new RelayCommand(ExportLogs);
     }
@@ -106,6 +113,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             Set(ref _selectedTabIndex, value);
             // タブに応じてSendVMのプロトコルを自動切替
             SendVm.Protocol = value == 2 ? Protocol.UDP : Protocol.TCP;
+            // TCP Server タブ選択時はセッション選択を TargetId に反映、それ以外はクリア
+            SendVm.TargetId = value == 1 ? (TcpServerVm.SelectedSession ?? "") : "";
         }
     }
 
