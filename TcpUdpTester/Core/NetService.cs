@@ -1,0 +1,375 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
+using System.Reactive.Subjects;
+using TcpUdpTester.Core.Chunkers;
+using TcpUdpTester.Models;
+
+namespace TcpUdpTester.Core;
+
+public sealed class NetService : INetService, IDisposable
+{
+    // --- Reactive streams ---
+    private readonly Subject<LogEntry> _logSubject = new();
+    private readonly Subject<StatsSnapshot> _statsSubject = new();
+    private readonly Subject<StateSnapshot> _stateSubject = new();
+
+    public IObservable<LogEntry> LogStream => _logSubject;
+    public IObservable<StatsSnapshot> StatsStream => _statsSubject;
+    public IObservable<StateSnapshot> StateStream => _stateSubject;
+
+    // --- Statistics ---
+    private long _txBytes, _rxBytes, _txCount, _rxCount, _errorCount;
+    private long _txBytesLast, _rxBytesLast;
+    private DateTimeOffset _lastStatsTime = DateTimeOffset.UtcNow;
+    private readonly Timer _statsTimer;
+
+    // --- TCP Client ---
+    private TcpClient? _tcpClient;
+    private CancellationTokenSource? _tcpClientCts;
+    private string _tcpClientSessionId = "";
+    private string _tcpClientRemote = "";
+
+    // --- TCP Server ---
+    private TcpListener? _tcpListener;
+    private CancellationTokenSource? _tcpServerCts;
+    private readonly ConcurrentDictionary<string, (TcpClient Client, CancellationTokenSource Cts)> _serverSessions = new();
+
+    // --- UDP ---
+    private UdpClient? _udpClient;
+    private CancellationTokenSource? _udpCts;
+    private string _udpRemoteHost = "";
+    private int _udpRemotePort;
+
+    public NetService()
+    {
+        _statsTimer = new Timer(_ => PublishStats(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    // ============================================================
+    // Stats
+    // ============================================================
+    private void PublishStats()
+    {
+        var now = DateTimeOffset.UtcNow;
+        double elapsed = (now - _lastStatsTime).TotalSeconds;
+        long curTx = Interlocked.Read(ref _txBytes);
+        long curRx = Interlocked.Read(ref _rxBytes);
+        double txBps = elapsed > 0 ? (curTx - _txBytesLast) * 8.0 / elapsed : 0;
+        double rxBps = elapsed > 0 ? (curRx - _rxBytesLast) * 8.0 / elapsed : 0;
+        _txBytesLast = curTx;
+        _rxBytesLast = curRx;
+        _lastStatsTime = now;
+
+        _statsSubject.OnNext(new StatsSnapshot(
+            curTx, curRx,
+            Interlocked.Read(ref _txCount),
+            Interlocked.Read(ref _rxCount),
+            txBps, rxBps,
+            Interlocked.Read(ref _errorCount)));
+    }
+
+    // ============================================================
+    // TCP Client
+    // ============================================================
+    public async Task TcpClientConnectAsync(string host, int port, ChunkMode chunkMode = ChunkMode.Raw)
+    {
+        await TcpClientDisconnectAsync();
+
+        _tcpClientSessionId = GenerateSessionId();
+        _tcpClientRemote = $"{host}:{port}";
+        _tcpClient = new TcpClient();
+
+        _stateSubject.OnNext(new StateSnapshot("TCP Client", "Connecting", _tcpClientSessionId, _tcpClientRemote));
+        try
+        {
+            await _tcpClient.ConnectAsync(host, port);
+            _stateSubject.OnNext(new StateSnapshot("TCP Client", "Connected", _tcpClientSessionId, _tcpClientRemote));
+
+            _tcpClientCts = new CancellationTokenSource();
+            _ = Task.Run(() => TcpReceiveLoopAsync(
+                _tcpClient, _tcpClientSessionId, _tcpClientRemote,
+                CreateChunker(chunkMode), _tcpClientCts.Token));
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref _errorCount);
+            _stateSubject.OnNext(new StateSnapshot("TCP Client", $"Error: {ex.Message}", _tcpClientSessionId, _tcpClientRemote));
+            _tcpClient.Dispose();
+            _tcpClient = null;
+        }
+    }
+
+    public async Task TcpClientDisconnectAsync()
+    {
+        _tcpClientCts?.Cancel();
+        _tcpClient?.Close();
+        _tcpClient?.Dispose();
+        _tcpClient = null;
+        _tcpClientCts = null;
+        _stateSubject.OnNext(new StateSnapshot("TCP Client", "Disconnected", "", ""));
+        await Task.CompletedTask;
+    }
+
+    // ============================================================
+    // TCP Server
+    // ============================================================
+    public async Task TcpServerStartAsync(string bindIp, int port, ChunkMode chunkMode = ChunkMode.Raw)
+    {
+        await TcpServerStopAsync();
+
+        var ip = string.IsNullOrWhiteSpace(bindIp) ? IPAddress.Any : IPAddress.Parse(bindIp);
+        _tcpListener = new TcpListener(ip, port);
+        _tcpListener.Start();
+        _tcpServerCts = new CancellationTokenSource();
+        _ = Task.Run(() => AcceptLoopAsync(chunkMode, _tcpServerCts.Token));
+
+        var bindDisplay = string.IsNullOrWhiteSpace(bindIp) ? "0.0.0.0" : bindIp;
+        _stateSubject.OnNext(new StateSnapshot("TCP Server", "Listening", "", $"{bindDisplay}:{port}"));
+    }
+
+    public async Task TcpServerStopAsync()
+    {
+        _tcpServerCts?.Cancel();
+        _tcpListener?.Stop();
+        _tcpListener = null;
+
+        foreach (var (_, (client, cts)) in _serverSessions)
+        {
+            cts.Cancel();
+            client.Close();
+            client.Dispose();
+        }
+        _serverSessions.Clear();
+
+        _stateSubject.OnNext(new StateSnapshot("TCP Server", "Stopped", "", ""));
+        await Task.CompletedTask;
+    }
+
+    private async Task AcceptLoopAsync(ChunkMode chunkMode, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var client = await _tcpListener!.AcceptTcpClientAsync(ct);
+                var sessionId = GenerateSessionId();
+                var remote = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
+                var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                _serverSessions[sessionId] = (client, cts);
+                _stateSubject.OnNext(new StateSnapshot("TCP Server", $"Client connected", sessionId, remote));
+                _ = Task.Run(() => TcpReceiveLoopAsync(client, sessionId, remote, CreateChunker(chunkMode), cts.Token));
+            }
+            catch (OperationCanceledException) { break; }
+            catch
+            {
+                if (!ct.IsCancellationRequested) Interlocked.Increment(ref _errorCount);
+            }
+        }
+    }
+
+    private async Task TcpReceiveLoopAsync(
+        TcpClient client, string sessionId, string remote, IChunker chunker, CancellationToken ct)
+    {
+        try
+        {
+            var stream = client.GetStream();
+            var buf = new byte[65536];
+            while (!ct.IsCancellationRequested)
+            {
+                int read = await stream.ReadAsync(buf.AsMemory(0, buf.Length), ct);
+                if (read == 0) break;
+                foreach (var chunk in chunker.Push(buf.AsSpan(0, read)))
+                    EmitRx(Protocol.TCP, sessionId, remote, chunk);
+            }
+            foreach (var chunk in chunker.Flush())
+                EmitRx(Protocol.TCP, sessionId, remote, chunk);
+        }
+        catch (OperationCanceledException) { }
+        catch { Interlocked.Increment(ref _errorCount); }
+        finally
+        {
+            if (_serverSessions.TryRemove(sessionId, out var s))
+            {
+                s.Client.Dispose();
+                _stateSubject.OnNext(new StateSnapshot("TCP Server", "Client disconnected", sessionId, remote));
+            }
+        }
+    }
+
+    // ============================================================
+    // UDP
+    // ============================================================
+    public async Task UdpStartAsync(int localPort, string remoteHost, int remotePort)
+    {
+        await UdpStopAsync();
+        _udpRemoteHost = remoteHost;
+        _udpRemotePort = remotePort;
+        _udpClient = new UdpClient(localPort);
+        _udpCts = new CancellationTokenSource();
+        _ = Task.Run(() => UdpReceiveLoopAsync(_udpCts.Token));
+        _stateSubject.OnNext(new StateSnapshot("UDP", "Active", "", $"Local:{localPort} Remote:{remoteHost}:{remotePort}"));
+        await Task.CompletedTask;
+    }
+
+    public async Task UdpStopAsync()
+    {
+        _udpCts?.Cancel();
+        _udpClient?.Close();
+        _udpClient?.Dispose();
+        _udpClient = null;
+        _stateSubject.OnNext(new StateSnapshot("UDP", "Stopped", "", ""));
+        await Task.CompletedTask;
+    }
+
+    private async Task UdpReceiveLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var result = await _udpClient!.ReceiveAsync(ct);
+                var remote = result.RemoteEndPoint.ToString();
+                EmitRx(Protocol.UDP, "udp", remote, result.Buffer);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch { Interlocked.Increment(ref _errorCount); }
+    }
+
+    // ============================================================
+    // Send
+    // ============================================================
+    public async Task SendAsync(SendRequest request)
+    {
+        var chunks = request.Options.SplitEnabled
+            ? SplitData(request.Data, request.Options)
+            : (IEnumerable<byte[]>)[request.Data];
+
+        int repeatCount = request.Options.RepeatEnabled ? Math.Max(1, request.Options.RepeatCount) : 1;
+
+        for (int r = 0; r < repeatCount; r++)
+        {
+            for (int burst = 0; burst < Math.Max(1, request.Options.BurstCount); burst++)
+            {
+                foreach (var chunk in chunks)
+                {
+                    await SendChunkAsync(request.Protocol, request.TargetId, chunk);
+                    if (request.Options.InterChunkDelayMs > 0)
+                        await Task.Delay(request.Options.InterChunkDelayMs);
+                }
+            }
+            if (r < repeatCount - 1 && request.Options.RepeatIntervalMs > 0)
+                await Task.Delay(request.Options.RepeatIntervalMs);
+        }
+    }
+
+    private static IEnumerable<byte[]> SplitData(byte[] data, SendOptions opts)
+    {
+        var rng = new Random();
+        int offset = 0;
+        while (offset < data.Length)
+        {
+            int size = opts.SplitRandom
+                ? rng.Next(1, Math.Max(2, opts.SplitRandomMaxSize))
+                : opts.SplitFixedSize;
+            size = Math.Min(size, data.Length - offset);
+            yield return data.AsSpan(offset, size).ToArray();
+            offset += size;
+        }
+    }
+
+    private async Task SendChunkAsync(Protocol protocol, string targetId, byte[] data)
+    {
+        try
+        {
+            if (protocol == Protocol.TCP)
+            {
+                NetworkStream? stream = null;
+                string remote = "";
+
+                if (string.IsNullOrEmpty(targetId) || targetId == _tcpClientSessionId)
+                {
+                    stream = _tcpClient?.GetStream();
+                    remote = _tcpClientRemote;
+                }
+                else if (_serverSessions.TryGetValue(targetId, out var session))
+                {
+                    stream = session.Client.GetStream();
+                    remote = session.Client.Client.RemoteEndPoint?.ToString() ?? targetId;
+                }
+
+                if (stream != null)
+                {
+                    await stream.WriteAsync(data);
+                    EmitTx(Protocol.TCP, targetId, remote, data);
+                }
+            }
+            else if (protocol == Protocol.UDP && _udpClient != null)
+            {
+                if (!string.IsNullOrEmpty(_udpRemoteHost) && _udpRemotePort > 0)
+                {
+                    await _udpClient.SendAsync(data, _udpRemoteHost, _udpRemotePort);
+                    EmitTx(Protocol.UDP, "udp", $"{_udpRemoteHost}:{_udpRemotePort}", data);
+                }
+            }
+        }
+        catch
+        {
+            Interlocked.Increment(ref _errorCount);
+        }
+    }
+
+    // ============================================================
+    // Helpers
+    // ============================================================
+    private void EmitRx(Protocol protocol, string sessionId, string remote, byte[] data)
+    {
+        var entry = new LogEntry(DateTimeOffset.UtcNow, protocol, Direction.RX, sessionId, remote, data.Length, data);
+        _logSubject.OnNext(entry);
+        Interlocked.Add(ref _rxBytes, data.Length);
+        Interlocked.Increment(ref _rxCount);
+    }
+
+    private void EmitTx(Protocol protocol, string sessionId, string remote, byte[] data)
+    {
+        var entry = new LogEntry(DateTimeOffset.UtcNow, protocol, Direction.TX, sessionId, remote, data.Length, data);
+        _logSubject.OnNext(entry);
+        Interlocked.Add(ref _txBytes, data.Length);
+        Interlocked.Increment(ref _txCount);
+    }
+
+    public IReadOnlyList<string> GetActiveSessions()
+    {
+        var list = new List<string>();
+        if (_tcpClient?.Connected == true) list.Add(_tcpClientSessionId);
+        list.AddRange(_serverSessions.Keys);
+        return list;
+    }
+
+    private static IChunker CreateChunker(ChunkMode mode) => mode switch
+    {
+        ChunkMode.FixedLength => new FixedLengthChunker(256),
+        ChunkMode.Delimiter   => new DelimiterChunker([0x0A]),
+        ChunkMode.TimeSlice   => new TimeSliceChunker(50),
+        ChunkMode.Line        => new LineChunker(),
+        _                     => new RawChunker()
+    };
+
+    private static string GenerateSessionId() => Guid.NewGuid().ToString("N")[..8];
+
+    public void Dispose()
+    {
+        _statsTimer.Dispose();
+        _tcpClientCts?.Cancel();
+        _tcpClient?.Dispose();
+        _tcpServerCts?.Cancel();
+        _tcpListener?.Stop();
+        foreach (var (_, (client, cts)) in _serverSessions) { cts.Cancel(); client.Dispose(); }
+        _udpCts?.Cancel();
+        _udpClient?.Dispose();
+        _logSubject.Dispose();
+        _statsSubject.Dispose();
+        _stateSubject.Dispose();
+    }
+}
