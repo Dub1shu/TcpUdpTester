@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.Windows;
+using TcpUdpTester.Core;
 using TcpUdpTester.ViewModels;
 
 namespace TcpUdpTester;
@@ -14,8 +15,24 @@ public partial class MainWindow : Window
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
 
+        var settings = SettingsService.Load();
+        ApplyWindowSettings(settings);
+        _viewModel.ApplySettings(settings);
+
         // トラフィックログに新規エントリ追加時に最下行へ自動スクロール
         _viewModel.FilteredLog.CollectionChanged += OnFilteredLogChanged;
+    }
+
+    private void ApplyWindowSettings(AppSettings s)
+    {
+        if (!double.IsNaN(s.WindowLeft) && !double.IsNaN(s.WindowTop))
+        {
+            Left = s.WindowLeft;
+            Top  = s.WindowTop;
+        }
+        Width  = s.WindowWidth;
+        Height = s.WindowHeight;
+        if (s.WindowMaximized) WindowState = WindowState.Maximized;
     }
 
     private void OnFilteredLogChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -29,6 +46,16 @@ public partial class MainWindow : Window
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
         _viewModel.FilteredLog.CollectionChanged -= OnFilteredLogChanged;
+
+        var settings = _viewModel.CaptureSettings();
+        var isNormal = WindowState == WindowState.Normal;
+        settings.WindowLeft      = isNormal ? Left   : RestoreBounds.Left;
+        settings.WindowTop       = isNormal ? Top    : RestoreBounds.Top;
+        settings.WindowWidth     = isNormal ? Width  : RestoreBounds.Width;
+        settings.WindowHeight    = isNormal ? Height : RestoreBounds.Height;
+        settings.WindowMaximized = WindowState == WindowState.Maximized;
+        SettingsService.Save(settings);
+
         _viewModel.Dispose();
     }
 

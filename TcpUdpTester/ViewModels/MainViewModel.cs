@@ -200,6 +200,73 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             writer.WriteLine($"\"{e.Time}\",{e.Direction},{e.Protocol},{e.Session},\"{e.Remote}\",{e.Length},\"{e.AsciiView.Replace("\"", "\"\"")}\"");
     }
 
+    // ================================================================
+    // Settings persistence
+    // ================================================================
+    public void ApplySettings(Core.AppSettings s)
+    {
+        SelectedTabIndex = s.SelectedTabIndex;
+        LogEnabled       = s.LogEnabled;
+        if (!string.IsNullOrEmpty(s.LogFolder)) LogFolder = s.LogFolder;
+
+        TcpClientVm.Host      = s.TcpClientHost;
+        TcpClientVm.Port      = s.TcpClientPort;
+        TcpClientVm.ChunkMode = s.TcpClientChunkMode;
+
+        TcpServerVm.BindIp    = s.TcpServerBindIp;
+        TcpServerVm.Port      = s.TcpServerPort;
+        TcpServerVm.ChunkMode = s.TcpServerChunkMode;
+
+        UdpVm.LocalPort  = s.UdpLocalPort;
+        UdpVm.RemoteHost = s.UdpRemoteHost;
+        UdpVm.RemotePort = s.UdpRemotePort;
+
+        SendVm.SendMode          = s.SendMode;
+        SendVm.TextInput         = s.SendTextInput;
+        SendVm.HexInput          = s.SendHexInput;
+        SendVm.FilePath          = s.SendFilePath;
+        SendVm.RepeatEnabled     = s.RepeatEnabled;
+        SendVm.RepeatCount       = s.RepeatCount;
+        SendVm.RepeatIntervalMs  = s.RepeatIntervalMs;
+        SendVm.SplitEnabled      = s.SplitEnabled;
+        SendVm.SplitFixedSize    = s.SplitFixedSize;
+        SendVm.SplitRandom       = s.SplitRandom;
+        SendVm.SplitRandomMaxSize= s.SplitRandomMaxSize;
+        SendVm.InterChunkDelayMs = s.InterChunkDelayMs;
+    }
+
+    public Core.AppSettings CaptureSettings() => new()
+    {
+        SelectedTabIndex   = SelectedTabIndex,
+        LogEnabled         = LogEnabled,
+        LogFolder          = LogFolder,
+
+        TcpClientHost      = TcpClientVm.Host,
+        TcpClientPort      = TcpClientVm.Port,
+        TcpClientChunkMode = TcpClientVm.ChunkMode,
+
+        TcpServerBindIp    = TcpServerVm.BindIp,
+        TcpServerPort      = TcpServerVm.Port,
+        TcpServerChunkMode = TcpServerVm.ChunkMode,
+
+        UdpLocalPort  = UdpVm.LocalPort,
+        UdpRemoteHost = UdpVm.RemoteHost,
+        UdpRemotePort = UdpVm.RemotePort,
+
+        SendMode           = SendVm.SendMode,
+        SendTextInput      = SendVm.TextInput,
+        SendHexInput       = SendVm.HexInput,
+        SendFilePath       = SendVm.FilePath,
+        RepeatEnabled      = SendVm.RepeatEnabled,
+        RepeatCount        = SendVm.RepeatCount,
+        RepeatIntervalMs   = SendVm.RepeatIntervalMs,
+        SplitEnabled       = SendVm.SplitEnabled,
+        SplitFixedSize     = SendVm.SplitFixedSize,
+        SplitRandom        = SendVm.SplitRandom,
+        SplitRandomMaxSize = SendVm.SplitRandomMaxSize,
+        InterChunkDelayMs  = SendVm.InterChunkDelayMs,
+    };
+
     public void Dispose()
     {
         _logSub.Dispose();
