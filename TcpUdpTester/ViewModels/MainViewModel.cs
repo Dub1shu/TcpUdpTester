@@ -242,6 +242,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         SendVm.SplitRandom       = s.SplitRandom;
         SendVm.SplitRandomMaxSize= s.SplitRandomMaxSize;
         SendVm.InterChunkDelayMs = s.InterChunkDelayMs;
+        SendVm.RandomMinSize      = s.RandomMinSize;
+        SendVm.RandomMaxSize      = s.RandomMaxSize;
+        SendVm.SeqSuffixEnabled   = s.SeqSuffixEnabled;
+        SendVm.SeqSuffixDigits    = s.SeqSuffixDigits;
+        SendVm.LoadTestEnabled    = s.LoadTestEnabled;
+        SendVm.LoadTestDurationSec= s.LoadTestDurationSec;
+        SendVm.LoadTestTargetMbps = s.LoadTestTargetMbps;
     }
 
     public Core.AppSettings CaptureSettings() => new()
@@ -274,6 +281,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         SplitRandom        = SendVm.SplitRandom,
         SplitRandomMaxSize = SendVm.SplitRandomMaxSize,
         InterChunkDelayMs  = SendVm.InterChunkDelayMs,
+        RandomMinSize       = SendVm.RandomMinSize,
+        RandomMaxSize       = SendVm.RandomMaxSize,
+        SeqSuffixEnabled    = SendVm.SeqSuffixEnabled,
+        SeqSuffixDigits     = SendVm.SeqSuffixDigits,
+        LoadTestEnabled     = SendVm.LoadTestEnabled,
+        LoadTestDurationSec = SendVm.LoadTestDurationSec,
+        LoadTestTargetMbps  = SendVm.LoadTestTargetMbps,
     };
 
     public void Dispose()

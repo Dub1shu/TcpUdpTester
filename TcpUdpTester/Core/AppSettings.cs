@@ -47,4 +47,11 @@ public sealed class AppSettings
     public bool     SplitRandom        { get; set; }
     public int      SplitRandomMaxSize { get; set; } = 128;
     public int      InterChunkDelayMs  { get; set; }
+    public int      RandomMinSize      { get; set; } = 1;
+    public int      RandomMaxSize      { get; set; } = 256;
+    public bool     SeqSuffixEnabled   { get; set; }
+    public int      SeqSuffixDigits    { get; set; } = 4;
+    public bool     LoadTestEnabled    { get; set; }
+    public int      LoadTestDurationSec{ get; set; } = 10;
+    public double   LoadTestTargetMbps { get; set; }
 }

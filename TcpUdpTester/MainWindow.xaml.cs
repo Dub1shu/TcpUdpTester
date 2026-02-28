@@ -1,5 +1,7 @@
 using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using TcpUdpTester.Core;
 using TcpUdpTester.ViewModels;
 
@@ -8,6 +10,7 @@ namespace TcpUdpTester;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
+    private ScrollViewer? _trafficScrollViewer;
 
     public MainWindow()
     {
@@ -19,8 +22,23 @@ public partial class MainWindow : Window
         ApplyWindowSettings(settings);
         _viewModel.ApplySettings(settings);
 
+        // DataGrid のテンプレート適用後に ScrollViewer をキャッシュ
+        TrafficGrid.Loaded += (_, _) => _trafficScrollViewer = FindScrollViewer(TrafficGrid);
+
         // トラフィックログに新規エントリ追加時に最下行へ自動スクロール
         _viewModel.FilteredLog.CollectionChanged += OnFilteredLogChanged;
+    }
+
+    private static ScrollViewer? FindScrollViewer(DependencyObject obj)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
+        {
+            var child = VisualTreeHelper.GetChild(obj, i);
+            if (child is ScrollViewer sv) return sv;
+            var result = FindScrollViewer(child);
+            if (result != null) return result;
+        }
+        return null;
     }
 
     private void ApplyWindowSettings(AppSettings s)
@@ -37,10 +55,11 @@ public partial class MainWindow : Window
 
     private void OnFilteredLogChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action == NotifyCollectionChangedAction.Add && TrafficGrid.Items.Count > 0)
-        {
-            TrafficGrid.ScrollIntoView(TrafficGrid.Items[^1]);
-        }
+        if (e.Action != NotifyCollectionChangedAction.Add || TrafficGrid.Items.Count == 0)
+            return;
+
+        // ScrollViewer を直接使うことで行仮想化の影響を受けずに最下行へスクロール
+        (_trafficScrollViewer ??= FindScrollViewer(TrafficGrid))?.ScrollToBottom();
     }
 
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
