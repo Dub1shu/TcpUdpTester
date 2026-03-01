@@ -141,7 +141,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" MinHeight="200"/>
                 <RowDefinition Height="5"/>
-                <RowDefinition Height="195" MinHeight="150"/>
+                <RowDefinition Height="215" MinHeight="190"/>
             </Grid.RowDefinitions>
 
             <!-- ===================================================== -->
@@ -412,7 +412,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="5"/>
-                        <ColumnDefinition Width="300" MinWidth="250"/>
+                        <ColumnDefinition Width="620" MinWidth="500"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Left: Input Area -->
@@ -513,15 +513,34 @@
                     <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"
                                   Background="#DDD" ResizeDirection="Columns"/>
 
-                    <!-- Right: Send Button + Options -->
+                    <!-- Right: Preset bar + Send Button + 2x2 Options Grid -->
                     <Grid Grid.Column="2">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Send Button + Stop Button + Status (always visible) -->
-                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4,4">
+                        <!-- Preset bar -->
+                        <DockPanel Grid.Row="0" Margin="4,4,4,2" LastChildFill="False">
+                            <Label Content="プリセット:" VerticalAlignment="Center" Padding="2,3"/>
+                            <ComboBox ItemsSource="{Binding SendVm.Presets}"
+                                      SelectedItem="{Binding SendVm.SelectedPreset}"
+                                      DisplayMemberPath="Name"
+                                      Width="120"/>
+                            <Button Content="削除"
+                                    Command="{Binding SendVm.DeletePresetCommand}"
+                                    Margin="2,0"/>
+                            <Separator/>
+                            <TextBox Text="{Binding SendVm.NewPresetName, UpdateSourceTrigger=PropertyChanged}"
+                                     Width="100" ToolTip="保存するプリセット名"/>
+                            <Button Content="保存"
+                                    Command="{Binding SendVm.SavePresetCommand}"
+                                    Margin="2,0"/>
+                        </DockPanel>
+
+                        <!-- Send Button + Stop Button + Status -->
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="4,2">
                             <Button Content="送 信" Command="{Binding SendVm.SendCommand}"
                                     FontSize="10" FontWeight="Bold" Height="20" Width="90" Margin="4,0"/>
                             <Button Content="停 止" Command="{Binding SendVm.StopCommand}"
@@ -532,123 +551,121 @@
                                        Foreground="Gray" FontSize="10" Margin="2,0"/>
                         </StackPanel>
 
-                        <!-- Scrollable Options -->
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                            <StackPanel>
+                        <!-- 4-column Options Grid (no scroll needed) -->
+                        <UniformGrid Grid.Row="2" Rows="1" Columns="4">
 
-                                <!-- Repeat Options -->
-                                <GroupBox Header="繰り返し送信" Padding="4,2">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                        </Grid.RowDefinitions>
-                                        <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
-                                                  Content="繰り返し有効" IsChecked="{Binding SendVm.RepeatEnabled}"/>
-                                        <Label Grid.Row="1" Grid.Column="0" Content="回数:"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1"
-                                                 Text="{Binding SendVm.RepeatCount}"
-                                                 IsEnabled="{Binding SendVm.RepeatEnabled}"/>
-                                        <Label Grid.Row="2" Grid.Column="0" Content="間隔(ms):"/>
-                                        <TextBox Grid.Row="2" Grid.Column="1"
-                                                 Text="{Binding SendVm.RepeatIntervalMs}"
-                                                 IsEnabled="{Binding SendVm.RepeatEnabled}"/>
-                                    </Grid>
-                                </GroupBox>
+                            <!-- 繰り返し送信 -->
+                            <GroupBox Header="繰り返し送信" Padding="4,2">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                    </Grid.RowDefinitions>
+                                    <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
+                                              Content="繰り返し有効" IsChecked="{Binding SendVm.RepeatEnabled}"/>
+                                    <Label Grid.Row="1" Grid.Column="0" Content="回数:"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1"
+                                             Text="{Binding SendVm.RepeatCount}"
+                                             IsEnabled="{Binding SendVm.RepeatEnabled}"/>
+                                    <Label Grid.Row="2" Grid.Column="0" Content="間隔(ms):"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1"
+                                             Text="{Binding SendVm.RepeatIntervalMs}"
+                                             IsEnabled="{Binding SendVm.RepeatEnabled}"/>
+                                </Grid>
+                            </GroupBox>
 
-                                <!-- Split Options -->
-                                <GroupBox Header="分割送信" Padding="4,2">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                        </Grid.RowDefinitions>
-                                        <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
-                                                  Content="分割有効" IsChecked="{Binding SendVm.SplitEnabled}"/>
-                                        <Label Grid.Row="1" Grid.Column="0" Content="固定サイズ:"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1"
-                                                 Text="{Binding SendVm.SplitFixedSize}"
-                                                 IsEnabled="{Binding SendVm.SplitEnabled}"/>
-                                        <CheckBox Grid.Row="2" Grid.ColumnSpan="2"
-                                                  Content="ランダムサイズ"
-                                                  IsChecked="{Binding SendVm.SplitRandom}"
-                                                  IsEnabled="{Binding SendVm.SplitEnabled}"/>
-                                        <Label Grid.Row="3" Grid.Column="0" Content="遅延(ms):"/>
-                                        <TextBox Grid.Row="3" Grid.Column="1"
-                                                 Text="{Binding SendVm.InterChunkDelayMs}"
-                                                 IsEnabled="{Binding SendVm.SplitEnabled}"/>
-                                    </Grid>
-                                </GroupBox>
+                            <!-- 分割送信 -->
+                            <GroupBox Header="分割送信" Padding="4,2">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                    </Grid.RowDefinitions>
+                                    <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
+                                              Content="分割有効" IsChecked="{Binding SendVm.SplitEnabled}"/>
+                                    <Label Grid.Row="1" Grid.Column="0" Content="固定サイズ:"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1"
+                                             Text="{Binding SendVm.SplitFixedSize}"
+                                             IsEnabled="{Binding SendVm.SplitEnabled}"/>
+                                    <CheckBox Grid.Row="2" Grid.ColumnSpan="2"
+                                              Content="ランダムサイズ"
+                                              IsChecked="{Binding SendVm.SplitRandom}"
+                                              IsEnabled="{Binding SendVm.SplitEnabled}"/>
+                                    <Label Grid.Row="3" Grid.Column="0" Content="遅延(ms):"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1"
+                                             Text="{Binding SendVm.InterChunkDelayMs}"
+                                             IsEnabled="{Binding SendVm.SplitEnabled}"/>
+                                </Grid>
+                            </GroupBox>
 
-                                <!-- Load Test Options -->
-                                <GroupBox Header="通信負荷" Padding="4,2">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                        </Grid.RowDefinitions>
-                                        <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
-                                                  Content="負荷モード有効 (繰り返し設定を無視)"
-                                                  IsChecked="{Binding SendVm.LoadTestEnabled}"/>
-                                        <Label Grid.Row="1" Grid.Column="0" Content="期間(秒):"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1"
-                                                 Text="{Binding SendVm.LoadTestDurationSec, UpdateSourceTrigger=PropertyChanged}"
-                                                 IsEnabled="{Binding SendVm.LoadTestEnabled}"
-                                                 ToolTip="0=停止ボタンまで継続"/>
-                                        <Label Grid.Row="2" Grid.Column="0" Content="目標(Mbps):"/>
-                                        <TextBox Grid.Row="2" Grid.Column="1"
-                                                 Text="{Binding SendVm.LoadTestTargetMbps, UpdateSourceTrigger=PropertyChanged}"
-                                                 IsEnabled="{Binding SendVm.LoadTestEnabled}"
-                                                 ToolTip="0=無制限 (可能な限り高速送信)"/>
-                                    </Grid>
-                                </GroupBox>
+                            <!-- 通信負荷 -->
+                            <GroupBox Header="通信負荷" Padding="4,2">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                    </Grid.RowDefinitions>
+                                    <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
+                                              Content="負荷モード (繰り返し設定を無視)"
+                                              IsChecked="{Binding SendVm.LoadTestEnabled}"/>
+                                    <Label Grid.Row="1" Grid.Column="0" Content="期間(秒):"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1"
+                                             Text="{Binding SendVm.LoadTestDurationSec, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding SendVm.LoadTestEnabled}"
+                                             ToolTip="0=停止ボタンまで継続"/>
+                                    <Label Grid.Row="2" Grid.Column="0" Content="目標(Mbps):"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1"
+                                             Text="{Binding SendVm.LoadTestTargetMbps, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding SendVm.LoadTestEnabled}"
+                                             ToolTip="0=無制限 (可能な限り高速送信)"/>
+                                </Grid>
+                            </GroupBox>
 
-                                <!-- Sequential Suffix Options -->
-                                <GroupBox Header="連番付与" Padding="4,2">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                            <RowDefinition/>
-                                        </Grid.RowDefinitions>
-                                        <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
-                                                  Content="連番有効 (末尾にASCII連番を付与)"
-                                                  IsChecked="{Binding SendVm.SeqSuffixEnabled}"/>
-                                        <Label Grid.Row="1" Grid.Column="0" Content="桁数:"/>
-                                        <TextBox Grid.Row="1" Grid.Column="1"
-                                                 Text="{Binding SendVm.SeqSuffixDigits, UpdateSourceTrigger=PropertyChanged}"
-                                                 IsEnabled="{Binding SendVm.SeqSuffixEnabled}"
-                                                 ToolTip="例: 桁数4 → 0001, 0002, ... (不足時はゼロ埋め)"/>
-                                        <Button Grid.Row="2" Grid.ColumnSpan="2"
-                                                Content="カウンタリセット"
-                                                Command="{Binding SendVm.ResetSeqCounterCommand}"
-                                                IsEnabled="{Binding SendVm.SeqSuffixEnabled}"
-                                                Padding="6,2" Margin="2,2"/>
-                                    </Grid>
-                                </GroupBox>
+                            <!-- 連番付与 -->
+                            <GroupBox Header="連番付与" Padding="4,2">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                    </Grid.RowDefinitions>
+                                    <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
+                                              Content="連番有効 (末尾にASCII連番)"
+                                              IsChecked="{Binding SendVm.SeqSuffixEnabled}"/>
+                                    <Label Grid.Row="1" Grid.Column="0" Content="桁数:"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1"
+                                             Text="{Binding SendVm.SeqSuffixDigits, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding SendVm.SeqSuffixEnabled}"
+                                             ToolTip="例: 桁数4 → 0001, 0002, ... (不足時はゼロ埋め)"/>
+                                    <Button Grid.Row="2" Grid.ColumnSpan="2"
+                                            Content="カウンタリセット"
+                                            Command="{Binding SendVm.ResetSeqCounterCommand}"
+                                            IsEnabled="{Binding SendVm.SeqSuffixEnabled}"
+                                            Padding="6,2" Margin="2,2"/>
+                                </Grid>
+                            </GroupBox>
 
-                            </StackPanel>
-                        </ScrollViewer>
+                        </UniformGrid>
                     </Grid>
                 </Grid>
             </GroupBox>

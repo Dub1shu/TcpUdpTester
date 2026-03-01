@@ -1,11 +1,10 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using TcpUdpTester.Core;
 using TcpUdpTester.Models;
 
 namespace TcpUdpTester.ViewModels;
-
-public enum SendMode { Text, Hex, File, Random }
 
 public sealed class SendViewModel : ViewModelBase
 {
@@ -44,6 +43,10 @@ public sealed class SendViewModel : ViewModelBase
     private int    _loadTestDurationSec = 10;
     private double _loadTestTargetMbps;
 
+    // --- Preset ---
+    private SendPreset? _selectedPreset;
+    private string      _newPresetName = "";
+
     // --- Status ---
     private bool     _isSending;
     private string   _sendStatus = "";
@@ -57,6 +60,28 @@ public sealed class SendViewModel : ViewModelBase
         StopCommand            = new RelayCommand(() => _sendCts?.Cancel(),          () => IsSending);
         BrowseFileCommand      = new RelayCommand(BrowseFile);
         ResetSeqCounterCommand = new RelayCommand(() => Interlocked.Exchange(ref _seqCounter, 0));
+        SavePresetCommand      = new RelayCommand(SavePreset);
+        DeletePresetCommand    = new RelayCommand(DeletePreset, () => _selectedPreset is not null);
+    }
+
+    // --- Preset properties ---
+    public ObservableCollection<SendPreset> Presets { get; } = new();
+
+    public SendPreset? SelectedPreset
+    {
+        get => _selectedPreset;
+        set
+        {
+            if (Set(ref _selectedPreset, value) && value is not null)
+                ApplyPreset(value);
+            DeletePresetCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    public string NewPresetName
+    {
+        get => _newPresetName;
+        set => Set(ref _newPresetName, value);
     }
 
     // --- Input properties ---
@@ -115,6 +140,8 @@ public sealed class SendViewModel : ViewModelBase
     public RelayCommand StopCommand            { get; }
     public RelayCommand BrowseFileCommand      { get; }
     public RelayCommand ResetSeqCounterCommand { get; }
+    public RelayCommand SavePresetCommand      { get; }
+    public RelayCommand DeletePresetCommand    { get; }
 
     // ================================================================
     // Send entry point
@@ -322,4 +349,91 @@ public sealed class SendViewModel : ViewModelBase
         var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "All Files|*.*" };
         if (dlg.ShowDialog() == true) FilePath = dlg.FileName;
     }
+
+    // ================================================================
+    // Preset management
+    // ================================================================
+    private void SavePreset()
+    {
+        var name = NewPresetName.Trim();
+        if (string.IsNullOrEmpty(name)) return;
+
+        var preset = CapturePreset(name);
+        var existing = Presets.FirstOrDefault(p => p.Name == name);
+        if (existing is not null)
+        {
+            var idx = Presets.IndexOf(existing);
+            Presets[idx] = preset;
+            _selectedPreset = preset;
+            OnPropertyChanged(nameof(SelectedPreset));
+        }
+        else
+        {
+            Presets.Add(preset);
+            _selectedPreset = preset;
+            OnPropertyChanged(nameof(SelectedPreset));
+        }
+        DeletePresetCommand.RaiseCanExecuteChanged();
+    }
+
+    private void DeletePreset()
+    {
+        if (_selectedPreset is null) return;
+        Presets.Remove(_selectedPreset);
+        _selectedPreset = null;
+        OnPropertyChanged(nameof(SelectedPreset));
+        DeletePresetCommand.RaiseCanExecuteChanged();
+    }
+
+    private void ApplyPreset(SendPreset p)
+    {
+        SendMode          = p.SendMode;
+        TextInput         = p.TextInput;
+        HexInput          = p.HexInput;
+        FilePath          = p.FilePath;
+        Protocol          = p.Protocol;
+        TargetId          = p.TargetId;
+        RepeatEnabled     = p.RepeatEnabled;
+        RepeatCount       = p.RepeatCount;
+        RepeatIntervalMs  = p.RepeatIntervalMs;
+        SplitEnabled      = p.SplitEnabled;
+        SplitFixedSize    = p.SplitFixedSize;
+        SplitRandom       = p.SplitRandom;
+        SplitRandomMaxSize= p.SplitRandomMaxSize;
+        InterChunkDelayMs = p.InterChunkDelayMs;
+        RandomMinSize     = p.RandomMinSize;
+        RandomMaxSize     = p.RandomMaxSize;
+        SeqSuffixEnabled  = p.SeqSuffixEnabled;
+        SeqSuffixDigits   = p.SeqSuffixDigits;
+        LoadTestEnabled   = p.LoadTestEnabled;
+        LoadTestDurationSec = p.LoadTestDurationSec;
+        LoadTestTargetMbps  = p.LoadTestTargetMbps;
+        NewPresetName     = p.Name;
+    }
+
+    private SendPreset CapturePreset(string name) => new()
+    {
+        Name              = name,
+        SendMode          = SendMode,
+        TextInput         = TextInput,
+        HexInput          = HexInput,
+        FilePath          = FilePath,
+        Protocol          = Protocol,
+        TargetId          = TargetId,
+        RepeatEnabled     = RepeatEnabled,
+        RepeatCount       = RepeatCount,
+        RepeatIntervalMs  = RepeatIntervalMs,
+        SplitEnabled      = SplitEnabled,
+        SplitFixedSize    = SplitFixedSize,
+        SplitRandom       = SplitRandom,
+        SplitRandomMaxSize= SplitRandomMaxSize,
+        InterChunkDelayMs = InterChunkDelayMs,
+        RandomMinSize     = RandomMinSize,
+        RandomMaxSize     = RandomMaxSize,
+        SeqSuffixEnabled  = SeqSuffixEnabled,
+        SeqSuffixDigits   = SeqSuffixDigits,
+        LoadTestEnabled   = LoadTestEnabled,
+        LoadTestDurationSec = LoadTestDurationSec,
+        LoadTestTargetMbps  = LoadTestTargetMbps,
+    };
 }

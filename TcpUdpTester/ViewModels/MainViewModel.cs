@@ -348,6 +348,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         IsSeqCheckEnabled  = s.SeqCheckEnabled;
         SeqCheckDigits     = s.SeqCheckDigits;
         IsCallbackEnabled  = s.CallbackEnabled;
+
+        SendVm.Presets.Clear();
+        foreach (var p in s.SendPresets)
+            SendVm.Presets.Add(p);
     }
 
     public Core.AppSettings CaptureSettings() => new()
@@ -390,6 +394,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         SeqCheckEnabled     = IsSeqCheckEnabled,
         SeqCheckDigits      = SeqCheckDigits,
         CallbackEnabled     = IsCallbackEnabled,
+        SendPresets         = [.. SendVm.Presets],
     };
 
     public void Dispose()

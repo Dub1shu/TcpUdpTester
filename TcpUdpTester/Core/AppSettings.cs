@@ -1,5 +1,4 @@
 using TcpUdpTester.Models;
-using TcpUdpTester.ViewModels;
 
 namespace TcpUdpTester.Core;
 
@@ -61,4 +60,7 @@ public sealed class AppSettings
 
     // Callback mode
     public bool CallbackEnabled { get; set; }
+
+    // Send presets
+    public List<SendPreset> SendPresets { get; set; } = [];
 }
