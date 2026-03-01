@@ -18,6 +18,9 @@ public partial class MainWindow : Window
         _viewModel = new MainViewModel();
         DataContext = _viewModel;
 
+        if (!string.IsNullOrWhiteSpace(SettingsService.ProfileName))
+            Title = $"NetTest Console [{SettingsService.ProfileName}]";
+
         var settings = SettingsService.Load();
         ApplyWindowSettings(settings);
         _viewModel.ApplySettings(settings);

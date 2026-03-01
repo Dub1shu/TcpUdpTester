@@ -6,9 +6,15 @@ namespace TcpUdpTester.Core;
 
 public static class SettingsService
 {
-    private static readonly string _path = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "NetTestConsole", "settings.json");
+    public static string? ProfileName { get; set; }
+
+    private static string GetPath()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        return string.IsNullOrWhiteSpace(ProfileName)
+            ? Path.Combine(appData, "NetTestConsole", "settings.json")
+            : Path.Combine(appData, "NetTestConsole", "profiles", ProfileName, "settings.json");
+    }
 
     private static readonly JsonSerializerOptions _options = new()
     {
@@ -20,9 +26,10 @@ public static class SettingsService
     {
         try
         {
-            if (File.Exists(_path))
+            var path = GetPath();
+            if (File.Exists(path))
             {
-                var json = File.ReadAllText(_path);
+                var json = File.ReadAllText(path);
                 return JsonSerializer.Deserialize<AppSettings>(json, _options) ?? new AppSettings();
             }
         }
@@ -34,8 +41,9 @@ public static class SettingsService
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(_path, JsonSerializer.Serialize(settings, _options));
+            var path = GetPath();
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(settings, _options));
         }
         catch { /* 書き込み失敗は無視 */ }
     }
