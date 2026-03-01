@@ -30,6 +30,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private bool   _seqCheckEnabled;
     private int    _seqCheckDigits = 4;
     private long   _seqGapCount;
+    private bool   _callbackEnabled;
 
     public MainViewModel()
     {
@@ -146,6 +147,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         set => Set(ref _seqGapCount, value);
     }
 
+    // --- Callback ---
+    public bool IsCallbackEnabled
+    {
+        get => _callbackEnabled;
+        set => Set(ref _callbackEnabled, value);
+    }
+
     // --- Commands ---
     public RelayCommand ClearCommand  { get; }
     public RelayCommand ExportCommand { get; }
@@ -156,6 +164,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private void OnLogEntry(LogEntry entry)
     {
         _logWriter.Enqueue(entry);
+
+        if (IsCallbackEnabled && entry.Direction == Direction.RX)
+        {
+            var req = new SendRequest(entry.Protocol, entry.SessionId, entry.Data, new SendOptions());
+            _ = _net.SendAsync(req);
+        }
+
         Application.Current?.Dispatcher.InvokeAsync(() =>
         {
             AddToTraffic(new TrafficEntryViewModel(entry));
@@ -307,8 +322,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         SendVm.LoadTestDurationSec= s.LoadTestDurationSec;
         SendVm.LoadTestTargetMbps = s.LoadTestTargetMbps;
 
-        IsSeqCheckEnabled = s.SeqCheckEnabled;
-        SeqCheckDigits    = s.SeqCheckDigits;
+        IsSeqCheckEnabled  = s.SeqCheckEnabled;
+        SeqCheckDigits     = s.SeqCheckDigits;
+        IsCallbackEnabled  = s.CallbackEnabled;
     }
 
     public Core.AppSettings CaptureSettings() => new()
@@ -350,6 +366,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         LoadTestTargetMbps  = SendVm.LoadTestTargetMbps,
         SeqCheckEnabled     = IsSeqCheckEnabled,
         SeqCheckDigits      = SeqCheckDigits,
+        CallbackEnabled     = IsCallbackEnabled,
     };
 
     public void Dispose()

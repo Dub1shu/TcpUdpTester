@@ -58,4 +58,7 @@ public sealed class AppSettings
     // Receive sequence check
     public bool SeqCheckEnabled { get; set; }
     public int  SeqCheckDigits  { get; set; } = 4;
+
+    // Callback mode
+    public bool CallbackEnabled { get; set; }
 }

@@ -73,6 +73,9 @@
                      IsEnabled="{Binding IsSeqCheckEnabled}"
                      ToolTip="末尾連番の桁数 (1〜10)"/>
             <Separator/>
+            <CheckBox Content="コールバック" IsChecked="{Binding IsCallbackEnabled}" Margin="4,0"
+                      ToolTip="受信したデータをそのまま送信元へ折り返します"/>
+            <Separator/>
             <Button Content="クリア" Command="{Binding ClearCommand}"/>
             <Button Content="エクスポート" Command="{Binding ExportCommand}"/>
         </ToolBar>
