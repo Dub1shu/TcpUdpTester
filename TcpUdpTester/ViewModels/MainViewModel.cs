@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Reactive.Linq;
 using System.Text;
 using System.Windows;
 using TcpUdpTester.Core;
@@ -42,7 +43,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         UdpVm       = new UdpViewModel(_net);
         SendVm      = new SendViewModel(_net);
 
-        _logSub   = _net.LogStream.Subscribe(OnLogEntry);
+        _logSub   = _net.LogStream
+            .Buffer(TimeSpan.FromMilliseconds(50))
+            .Where(batch => batch.Count > 0)
+            .Subscribe(OnLogBatch);
         _statsSub = _net.StatsStream.Subscribe(OnStats);
         _stateSub = _net.StateStream.Subscribe(OnState);
 
@@ -161,29 +165,39 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     // ================================================================
     // Handlers
     // ================================================================
-    private void OnLogEntry(LogEntry entry)
+    // バックグラウンドスレッドで 50ms 分のエントリをまとめて処理する
+    private void OnLogBatch(IList<LogEntry> entries)
     {
-        _logWriter.Enqueue(entry);
-
-        if (IsCallbackEnabled && entry.Direction == Direction.RX)
+        // バイナリログとコールバックはスレッドセーフなのでここで処理
+        foreach (var entry in entries)
         {
-            var req = new SendRequest(entry.Protocol, entry.SessionId, entry.Data, new SendOptions());
-            _ = _net.SendAsync(req);
+            _logWriter.Enqueue(entry);
+
+            if (IsCallbackEnabled && entry.Direction == Direction.RX)
+            {
+                var req = new SendRequest(entry.Protocol, entry.SessionId, entry.Data, new SendOptions());
+                _ = _net.SendAsync(req);
+            }
         }
 
-        Application.Current?.Dispatcher.InvokeAsync(() =>
-        {
-            AddToTraffic(new TrafficEntryViewModel(entry));
+        // 連番検査もバックグラウンドで実行し、VM を事前生成する
+        bool seqEnabled = IsSeqCheckEnabled;
+        int  seqDigits  = SeqCheckDigits;
+        int  newGaps    = 0;
+        var  vms        = new List<TrafficEntryViewModel>(entries.Count);
 
-            // 受信データ連番検査
-            if (IsSeqCheckEnabled && entry.Direction == Direction.RX)
+        foreach (var entry in entries)
+        {
+            vms.Add(new TrafficEntryViewModel(entry));
+
+            if (seqEnabled && entry.Direction == Direction.RX)
             {
                 var sessionKey = $"{entry.Protocol}:{entry.SessionId}:{entry.Remote}";
-                var result = _seqChecker.Check(sessionKey, entry.Data, SeqCheckDigits);
+                var result = _seqChecker.Check(sessionKey, entry.Data, seqDigits);
                 if (result != null)
                 {
-                    SeqGapCount++;
-                    var fmt = $"D{SeqCheckDigits}";
+                    newGaps++;
+                    var fmt = $"D{seqDigits}";
                     var msg = $"[連番欠落] 期待={result.Expected.ToString(fmt)}" +
                               $" 実際={result.Actual.ToString(fmt)}" +
                               $" 欠落数={result.GapCount}";
@@ -191,9 +205,18 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
                         DateTimeOffset.Now, entry.Protocol, Direction.Gap,
                         entry.SessionId, entry.Remote,
                         msg.Length, Encoding.UTF8.GetBytes(msg));
-                    AddToTraffic(new TrafficEntryViewModel(gapEntry));
+                    vms.Add(new TrafficEntryViewModel(gapEntry));
                 }
             }
+        }
+
+        // UI 更新は 1 回の Dispatcher 呼び出しでまとめて行う
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            foreach (var vm in vms)
+                AddToTraffic(vm);
+            if (newGaps > 0)
+                SeqGapCount += newGaps;
         });
     }
 
