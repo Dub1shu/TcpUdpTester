@@ -365,3 +365,4 @@ FodyWeavers.xsd
 # User Profile Data
 spec/
 .claude/
+CLAUDE.md
