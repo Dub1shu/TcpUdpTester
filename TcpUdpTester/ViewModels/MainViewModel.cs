@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 using TcpUdpTester.Core;
 using TcpUdpTester.Models;
 
@@ -13,6 +15,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     private readonly BinaryLogWriter _logWriter;
     private readonly IDisposable _logSub, _statsSub, _stateSub;
     private readonly SeqChecker _seqChecker = new();
+    private readonly ConcurrentQueue<LogEntry> _logBuffer = new();
+    private readonly DispatcherTimer _flushTimer;
 
     private string _stateText  = "Ready";
     private long   _txBytes, _rxBytes, _txCount, _rxCount, _errorCount;
@@ -45,6 +49,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         _logSub   = _net.LogStream.Subscribe(OnLogEntry);
         _statsSub = _net.StatsStream.Subscribe(OnStats);
         _stateSub = _net.StateStream.Subscribe(OnState);
+
+        _flushTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(50)
+        };
+        _flushTimer.Tick += FlushLogBuffer;
+        _flushTimer.Start();
 
         // TCP Server のセッション選択を SendVm.TargetId に自動連携
         TcpServerVm.PropertyChanged += (_, e) =>
@@ -171,7 +182,15 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             _ = _net.SendAsync(req);
         }
 
-        Application.Current?.Dispatcher.InvokeAsync(() =>
+        _logBuffer.Enqueue(entry);
+    }
+
+    // DispatcherTimer (Background priority, 50ms) で一括フラッシュ
+    private void FlushLogBuffer(object? sender, EventArgs e)
+    {
+        const int maxPerFlush = 500;
+        int count = 0;
+        while (count < maxPerFlush && _logBuffer.TryDequeue(out var entry))
         {
             AddToTraffic(new TrafficEntryViewModel(entry));
 
@@ -194,7 +213,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
                     AddToTraffic(new TrafficEntryViewModel(gapEntry));
                 }
             }
-        });
+            count++;
+        }
     }
 
     private void AddToTraffic(TrafficEntryViewModel vm)
@@ -376,6 +396,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _flushTimer.Stop();
         _logSub.Dispose();
         _statsSub.Dispose();
         _stateSub.Dispose();
