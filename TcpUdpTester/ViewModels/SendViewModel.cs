@@ -19,6 +19,7 @@ public sealed class SendViewModel : ViewModelBase
 
     // --- Repeat ---
     private bool _repeatEnabled;
+    private bool _repeatInfinite;
     private int  _repeatCount      = 1;
     private int  _repeatIntervalMs = 1000;
 
@@ -40,6 +41,7 @@ public sealed class SendViewModel : ViewModelBase
 
     // --- Load test ---
     private bool   _loadTestEnabled;
+    private bool   _loadTestInfinite;
     private int    _loadTestDurationSec = 10;
     private double _loadTestTargetMbps;
 
@@ -92,7 +94,17 @@ public sealed class SendViewModel : ViewModelBase
     public string FilePath  { get => _filePath;  set => Set(ref _filePath, value); }
 
     // --- Repeat properties ---
-    public bool RepeatEnabled    { get => _repeatEnabled;    set => Set(ref _repeatEnabled, value); }
+    public bool RepeatEnabled
+    {
+        get => _repeatEnabled;
+        set { if (Set(ref _repeatEnabled, value)) OnPropertyChanged(nameof(RepeatCountEnabled)); }
+    }
+    public bool RepeatInfinite
+    {
+        get => _repeatInfinite;
+        set { if (Set(ref _repeatInfinite, value)) OnPropertyChanged(nameof(RepeatCountEnabled)); }
+    }
+    public bool RepeatCountEnabled => RepeatEnabled && !RepeatInfinite;
     public int  RepeatCount      { get => _repeatCount;      set => Set(ref _repeatCount, value); }
     public int  RepeatIntervalMs { get => _repeatIntervalMs; set => Set(ref _repeatIntervalMs, value); }
 
@@ -112,7 +124,17 @@ public sealed class SendViewModel : ViewModelBase
     public int  SeqSuffixDigits  { get => _seqSuffixDigits;  set => Set(ref _seqSuffixDigits, value); }
 
     // --- Load test properties ---
-    public bool   LoadTestEnabled     { get => _loadTestEnabled;     set => Set(ref _loadTestEnabled, value); }
+    public bool LoadTestEnabled
+    {
+        get => _loadTestEnabled;
+        set { if (Set(ref _loadTestEnabled, value)) OnPropertyChanged(nameof(LoadTestDurationEnabled)); }
+    }
+    public bool LoadTestInfinite
+    {
+        get => _loadTestInfinite;
+        set { if (Set(ref _loadTestInfinite, value)) OnPropertyChanged(nameof(LoadTestDurationEnabled)); }
+    }
+    public bool   LoadTestDurationEnabled => LoadTestEnabled && !LoadTestInfinite;
     public int    LoadTestDurationSec { get => _loadTestDurationSec; set => Set(ref _loadTestDurationSec, value); }
     public double LoadTestTargetMbps  { get => _loadTestTargetMbps;  set => Set(ref _loadTestTargetMbps, value); }
 
@@ -181,6 +203,41 @@ public sealed class SendViewModel : ViewModelBase
     private async Task RunNormalSendAsync(CancellationToken ct)
     {
         bool needsPerIter = (SendMode == SendMode.Random) || SeqSuffixEnabled;
+
+        // --- Infinite loop mode ---
+        if (RepeatEnabled && RepeatInfinite)
+        {
+            var singleOpts = BuildSingleOpts();
+            byte[]? baseData = SendMode != SendMode.Random ? BuildData() : null;
+            if (SendMode != SendMode.Random && (baseData is null || baseData.Length == 0))
+            { SendStatus = "送信データがありません"; return; }
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            long totalBytes  = 0;
+            long packetCount = 0;
+            long lastUpdateMs = 0;
+
+            while (!ct.IsCancellationRequested)
+            {
+                var data = needsPerIter ? BuildIterData(baseData) : baseData!;
+                await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts));
+                totalBytes  += data.Length;
+                packetCount++;
+
+                long elapsedMs = sw.ElapsedMilliseconds;
+                if (elapsedMs - lastUpdateMs >= 200)
+                {
+                    lastUpdateMs = elapsedMs;
+                    SendStatus = $"繰り返し送信中... {packetCount} pkts / {totalBytes:N0} B";
+                }
+
+                if (RepeatIntervalMs > 0)
+                    await Task.Delay(RepeatIntervalMs, ct);
+            }
+            return;
+        }
+
+        // --- Single or finite repeat ---
         if (!needsPerIter)
         {
             var data = BuildData();
@@ -194,26 +251,26 @@ public sealed class SendViewModel : ViewModelBase
         // Per-iteration: Random data (new each time) or SeqSuffix (increments each time)
         var opts  = BuildFullOpts();
         int count = opts.RepeatEnabled ? Math.Max(1, opts.RepeatCount) : 1;
-        var singleOpts = BuildSingleOpts();
+        var singleOpts2 = BuildSingleOpts();
 
-        byte[]? baseData = SendMode != SendMode.Random ? BuildData() : null;
-        if (SendMode != SendMode.Random && (baseData is null || baseData.Length == 0))
+        byte[]? baseData2 = SendMode != SendMode.Random ? BuildData() : null;
+        if (SendMode != SendMode.Random && (baseData2 is null || baseData2.Length == 0))
         {
             SendStatus = "送信データがありません"; return;
         }
 
         SendStatus = "送信中...";
-        int totalBytes = 0;
+        int totalBytes2 = 0;
         for (int r = 0; r < count; r++)
         {
             ct.ThrowIfCancellationRequested();
-            var data = BuildIterData(baseData);
-            await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts));
-            totalBytes += data.Length;
+            var data = BuildIterData(baseData2);
+            await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts2));
+            totalBytes2 += data.Length;
             if (r < count - 1 && opts.RepeatIntervalMs > 0)
                 await Task.Delay(opts.RepeatIntervalMs, ct);
         }
-        SendStatus = $"送信完了  {totalBytes} bytes";
+        SendStatus = $"送信完了  {totalBytes2} bytes";
     }
 
     // ================================================================
@@ -240,7 +297,7 @@ public sealed class SendViewModel : ViewModelBase
         while (!ct.IsCancellationRequested)
         {
             // Duration check
-            if (LoadTestDurationSec > 0 && sw.Elapsed.TotalSeconds >= LoadTestDurationSec)
+            if (!LoadTestInfinite && LoadTestDurationSec > 0 && sw.Elapsed.TotalSeconds >= LoadTestDurationSec)
                 break;
 
             // Rate limiting: if we're ahead of target, wait
@@ -394,6 +451,7 @@ public sealed class SendViewModel : ViewModelBase
         Protocol          = p.Protocol;
         TargetId          = p.TargetId;
         RepeatEnabled     = p.RepeatEnabled;
+        RepeatInfinite    = p.RepeatInfinite;
         RepeatCount       = p.RepeatCount;
         RepeatIntervalMs  = p.RepeatIntervalMs;
         SplitEnabled      = p.SplitEnabled;
@@ -405,7 +463,8 @@ public sealed class SendViewModel : ViewModelBase
         RandomMaxSize     = p.RandomMaxSize;
         SeqSuffixEnabled  = p.SeqSuffixEnabled;
         SeqSuffixDigits   = p.SeqSuffixDigits;
-        LoadTestEnabled   = p.LoadTestEnabled;
+        LoadTestEnabled     = p.LoadTestEnabled;
+        LoadTestInfinite    = p.LoadTestInfinite;
         LoadTestDurationSec = p.LoadTestDurationSec;
         LoadTestTargetMbps  = p.LoadTestTargetMbps;
         NewPresetName     = p.Name;
@@ -421,6 +480,7 @@ public sealed class SendViewModel : ViewModelBase
         Protocol          = Protocol,
         TargetId          = TargetId,
         RepeatEnabled     = RepeatEnabled,
+        RepeatInfinite    = RepeatInfinite,
         RepeatCount       = RepeatCount,
         RepeatIntervalMs  = RepeatIntervalMs,
         SplitEnabled      = SplitEnabled,
@@ -432,7 +492,8 @@ public sealed class SendViewModel : ViewModelBase
         RandomMaxSize     = RandomMaxSize,
         SeqSuffixEnabled  = SeqSuffixEnabled,
         SeqSuffixDigits   = SeqSuffixDigits,
-        LoadTestEnabled   = LoadTestEnabled,
+        LoadTestEnabled     = LoadTestEnabled,
+        LoadTestInfinite    = LoadTestInfinite,
         LoadTestDurationSec = LoadTestDurationSec,
         LoadTestTargetMbps  = LoadTestTargetMbps,
     };

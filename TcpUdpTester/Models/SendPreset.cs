@@ -14,6 +14,7 @@ public sealed class SendPreset
 
     // Repeat
     public bool RepeatEnabled    { get; set; }
+    public bool RepeatInfinite   { get; set; }
     public int  RepeatCount      { get; set; } = 1;
     public int  RepeatIntervalMs { get; set; } = 1000;
 
@@ -34,6 +35,7 @@ public sealed class SendPreset
 
     // Load test
     public bool   LoadTestEnabled     { get; set; }
+    public bool   LoadTestInfinite    { get; set; }
     public int    LoadTestDurationSec { get; set; } = 10;
     public double LoadTestTargetMbps  { get; set; }
 

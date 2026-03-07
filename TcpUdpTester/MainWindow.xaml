@@ -565,15 +565,20 @@
                                         <RowDefinition/>
                                         <RowDefinition/>
                                         <RowDefinition/>
+                                        <RowDefinition/>
                                     </Grid.RowDefinitions>
                                     <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
                                               Content="繰り返し有効" IsChecked="{Binding SendVm.RepeatEnabled}"/>
-                                    <Label Grid.Row="1" Grid.Column="0" Content="回数:"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1"
-                                             Text="{Binding SendVm.RepeatCount}"
-                                             IsEnabled="{Binding SendVm.RepeatEnabled}"/>
-                                    <Label Grid.Row="2" Grid.Column="0" Content="間隔(ms):"/>
+                                    <CheckBox Grid.Row="1" Grid.ColumnSpan="2"
+                                              Content="停止まで繰り返す"
+                                              IsChecked="{Binding SendVm.RepeatInfinite}"
+                                              IsEnabled="{Binding SendVm.RepeatEnabled}"/>
+                                    <Label Grid.Row="2" Grid.Column="0" Content="回数:"/>
                                     <TextBox Grid.Row="2" Grid.Column="1"
+                                             Text="{Binding SendVm.RepeatCount}"
+                                             IsEnabled="{Binding SendVm.RepeatCountEnabled}"/>
+                                    <Label Grid.Row="3" Grid.Column="0" Content="間隔(ms):"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1"
                                              Text="{Binding SendVm.RepeatIntervalMs}"
                                              IsEnabled="{Binding SendVm.RepeatEnabled}"/>
                                 </Grid>
@@ -620,17 +625,21 @@
                                         <RowDefinition/>
                                         <RowDefinition/>
                                         <RowDefinition/>
+                                        <RowDefinition/>
                                     </Grid.RowDefinitions>
                                     <CheckBox Grid.Row="0" Grid.ColumnSpan="2"
                                               Content="負荷モード (繰り返し設定を無視)"
                                               IsChecked="{Binding SendVm.LoadTestEnabled}"/>
-                                    <Label Grid.Row="1" Grid.Column="0" Content="期間(秒):"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1"
-                                             Text="{Binding SendVm.LoadTestDurationSec, UpdateSourceTrigger=PropertyChanged}"
-                                             IsEnabled="{Binding SendVm.LoadTestEnabled}"
-                                             ToolTip="0=停止ボタンまで継続"/>
-                                    <Label Grid.Row="2" Grid.Column="0" Content="目標(Mbps):"/>
+                                    <CheckBox Grid.Row="1" Grid.ColumnSpan="2"
+                                              Content="停止まで続ける"
+                                              IsChecked="{Binding SendVm.LoadTestInfinite}"
+                                              IsEnabled="{Binding SendVm.LoadTestEnabled}"/>
+                                    <Label Grid.Row="2" Grid.Column="0" Content="期間(秒):"/>
                                     <TextBox Grid.Row="2" Grid.Column="1"
+                                             Text="{Binding SendVm.LoadTestDurationSec, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding SendVm.LoadTestDurationEnabled}"/>
+                                    <Label Grid.Row="3" Grid.Column="0" Content="目標(Mbps):"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1"
                                              Text="{Binding SendVm.LoadTestTargetMbps, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding SendVm.LoadTestEnabled}"
                                              ToolTip="0=無制限 (可能な限り高速送信)"/>
