@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO.Ports;
 using System.Net;
 using System.Net.Sockets;
 using System.Reactive.Subjects;
@@ -41,6 +42,11 @@ public sealed class NetService : INetService, IDisposable
     private CancellationTokenSource? _udpCts;
     private string _udpRemoteHost = "";
     private int _udpRemotePort;
+
+    // --- UART ---
+    private SerialPort? _serialPort;
+    private CancellationTokenSource? _uartCts;
+    private string _uartPortName = "";
 
     public NetService()
     {
@@ -280,6 +286,82 @@ public sealed class NetService : INetService, IDisposable
     }
 
     // ============================================================
+    // UART
+    // ============================================================
+    public async Task UartOpenAsync(string portName, UartOptions? opts = null, ChunkMode chunkMode = ChunkMode.Raw)
+    {
+        await UartCloseAsync();
+        opts ??= new UartOptions();
+        _uartPortName = portName;
+
+        _stateSubject.OnNext(new StateSnapshot("UART", "Opening", portName, portName));
+        try
+        {
+            var port = new SerialPort(portName, opts.BaudRate, opts.Parity, opts.DataBits, opts.StopBits)
+            {
+                Handshake = opts.Handshake,
+                ReadTimeout  = SerialPort.InfiniteTimeout,
+                WriteTimeout = SerialPort.InfiniteTimeout,
+            };
+            port.Open();
+            _serialPort = port;
+            _uartCts = new CancellationTokenSource();
+            _stateSubject.OnNext(new StateSnapshot("UART", "Opened", portName, portName));
+            EmitEvent(Protocol.UART, portName, portName, $"[開始] {portName} {opts.BaudRate}bps");
+            _ = Task.Run(() => UartReceiveLoopAsync(port, portName, CreateChunker(chunkMode), _uartCts.Token));
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref _errorCount);
+            _stateSubject.OnNext(new StateSnapshot("UART", $"Error: {ex.Message}", portName, portName));
+            EmitEvent(Protocol.UART, portName, portName, $"[エラー] {ex.Message}");
+            _serialPort = null;
+            _uartPortName = "";
+        }
+    }
+
+    public async Task UartCloseAsync()
+    {
+        var portName = _uartPortName;
+        _uartCts?.Cancel();
+        try { _serialPort?.Close(); } catch { }
+        _serialPort?.Dispose();
+        _serialPort = null;
+        _uartCts = null;
+        _uartPortName = "";
+        if (!string.IsNullOrEmpty(portName))
+            EmitEvent(Protocol.UART, portName, portName, "[停止]");
+        _stateSubject.OnNext(new StateSnapshot("UART", "Closed", "", ""));
+        await Task.CompletedTask;
+    }
+
+    public IReadOnlyList<string> GetSerialPorts() => SerialPort.GetPortNames();
+
+    private async Task UartReceiveLoopAsync(SerialPort port, string portName, IChunker chunker, CancellationToken ct)
+    {
+        var buf = new byte[4096];
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                int read = await port.BaseStream.ReadAsync(buf.AsMemory(0, buf.Length), ct);
+                if (read == 0) break;
+                foreach (var chunk in chunker.Push(buf.AsSpan(0, read)))
+                    EmitRx(Protocol.UART, portName, portName, chunk);
+            }
+            foreach (var chunk in chunker.Flush())
+                EmitRx(Protocol.UART, portName, portName, chunk);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref _errorCount);
+            EmitEvent(Protocol.UART, portName, portName, $"[受信エラー] {ex.Message}");
+            _stateSubject.OnNext(new StateSnapshot("UART", $"Error: {ex.Message}", portName, portName));
+        }
+    }
+
+    // ============================================================
     // Send
     // ============================================================
     public async Task SendAsync(SendRequest request)
@@ -355,6 +437,11 @@ public sealed class NetService : INetService, IDisposable
                     EmitTx(Protocol.UDP, "udp", $"{_udpRemoteHost}:{_udpRemotePort}", data);
                 }
             }
+            else if (protocol == Protocol.UART && _serialPort?.IsOpen == true)
+            {
+                await _serialPort.BaseStream.WriteAsync(data);
+                EmitTx(Protocol.UART, _uartPortName, _uartPortName, data);
+            }
         }
         catch (Exception ex)
         {
@@ -394,6 +481,7 @@ public sealed class NetService : INetService, IDisposable
         var list = new List<string>();
         if (_tcpClient?.Connected == true) list.Add(_tcpClientSessionId);
         list.AddRange(_serverSessions.Keys);
+        if (_serialPort?.IsOpen == true) list.Add(_uartPortName);
         return list;
     }
 
@@ -418,6 +506,9 @@ public sealed class NetService : INetService, IDisposable
         foreach (var (_, (client, cts)) in _serverSessions) { cts.Cancel(); client.Dispose(); }
         _udpCts?.Cancel();
         _udpClient?.Dispose();
+        _uartCts?.Cancel();
+        try { _serialPort?.Close(); } catch { }
+        _serialPort?.Dispose();
         _logSubject.Dispose();
         _statsSubject.Dispose();
         _stateSubject.Dispose();

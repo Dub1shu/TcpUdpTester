@@ -20,4 +20,8 @@ public interface INetService
     Task SendAsync(SendRequest request);
 
     IReadOnlyList<string> GetActiveSessions();
+
+    Task UartOpenAsync(string portName, UartOptions? opts = null, ChunkMode chunkMode = ChunkMode.Raw);
+    Task UartCloseAsync();
+    IReadOnlyList<string> GetSerialPorts();
 }

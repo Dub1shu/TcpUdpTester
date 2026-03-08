@@ -39,6 +39,15 @@ public sealed class AppSettings
     public string UdpRecvBuf    { get; set; } = "0";
     public string UdpSendBuf    { get; set; } = "0";
 
+    // UART
+    public string    UartPortName  { get; set; } = "";
+    public string    UartBaudRate  { get; set; } = "115200";
+    public int       UartDataBits  { get; set; } = 8;
+    public string    UartParity    { get; set; } = "None";
+    public string    UartStopBits  { get; set; } = "1";
+    public string    UartHandshake { get; set; } = "None";
+    public ChunkMode UartChunkMode { get; set; } = ChunkMode.Raw;
+
     // Send panel
     public SendMode SendMode           { get; set; } = SendMode.Text;
     public string   SendTextInput      { get; set; } = "";

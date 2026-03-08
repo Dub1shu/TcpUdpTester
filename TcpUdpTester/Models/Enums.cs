@@ -1,6 +1,6 @@
 namespace TcpUdpTester.Models;
 
-public enum Protocol { TCP, UDP }
+public enum Protocol { TCP, UDP, UART }
 
 public enum Direction { TX, RX, Gap, Event }
 

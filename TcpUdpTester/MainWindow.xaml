@@ -319,6 +319,73 @@
                         </ScrollViewer>
                     </TabItem>
 
+                    <!-- UART -->
+                    <TabItem Header="UART">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="4">
+                                <GroupBox Header="シリアルポート設定">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="90"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Label Grid.Row="0" Grid.Column="0" Content="COMポート:"/>
+                                        <DockPanel Grid.Row="0" Grid.Column="1">
+                                            <Button DockPanel.Dock="Right" Content="更新"
+                                                    Command="{Binding UartVm.RefreshPortsCommand}"
+                                                    Width="40" Padding="0" Margin="2,0,0,0"/>
+                                            <ComboBox ItemsSource="{Binding UartVm.AvailablePorts}"
+                                                      SelectedItem="{Binding UartVm.PortName}"/>
+                                        </DockPanel>
+                                        <Label Grid.Row="1" Grid.Column="0" Content="ボーレート:"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="1"
+                                                  ItemsSource="{Binding UartVm.BaudRates}"
+                                                  SelectedItem="{Binding UartVm.BaudRate}"/>
+                                        <Label Grid.Row="2" Grid.Column="0" Content="データビット:"/>
+                                        <ComboBox Grid.Row="2" Grid.Column="1"
+                                                  ItemsSource="{Binding UartVm.DataBitsList}"
+                                                  SelectedItem="{Binding UartVm.DataBits}"/>
+                                        <Label Grid.Row="3" Grid.Column="0" Content="パリティ:"/>
+                                        <ComboBox Grid.Row="3" Grid.Column="1"
+                                                  ItemsSource="{Binding UartVm.ParityList}"
+                                                  SelectedItem="{Binding UartVm.Parity}"/>
+                                        <Label Grid.Row="4" Grid.Column="0" Content="ストップビット:"/>
+                                        <ComboBox Grid.Row="4" Grid.Column="1"
+                                                  ItemsSource="{Binding UartVm.StopBitsList}"
+                                                  SelectedItem="{Binding UartVm.StopBits}"/>
+                                        <Label Grid.Row="5" Grid.Column="0" Content="フロー制御:"/>
+                                        <ComboBox Grid.Row="5" Grid.Column="1"
+                                                  ItemsSource="{Binding UartVm.HandshakeList}"
+                                                  SelectedItem="{Binding UartVm.Handshake}"/>
+                                        <Label Grid.Row="6" Grid.Column="0" Content="チャンク:"/>
+                                        <ComboBox Grid.Row="6" Grid.Column="1"
+                                                  ItemsSource="{Binding UartVm.ChunkModes}"
+                                                  SelectedItem="{Binding UartVm.ChunkMode}"/>
+                                        <Label Grid.Row="7" Grid.Column="0" Content="状態:"/>
+                                        <TextBlock Grid.Row="7" Grid.Column="1"
+                                                   Text="{Binding UartVm.Status}"
+                                                   VerticalAlignment="Center" Margin="4,0"
+                                                   FontWeight="Bold"/>
+                                    </Grid>
+                                </GroupBox>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4">
+                                    <Button Content="開始" Command="{Binding UartVm.OpenCommand}" Width="80"/>
+                                    <Button Content="停止" Command="{Binding UartVm.CloseCommand}" Width="80"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
                 </TabControl>
 
                 <!-- Vertical GridSplitter -->

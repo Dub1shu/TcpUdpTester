@@ -45,6 +45,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         TcpClientVm = new TcpClientViewModel(_net);
         TcpServerVm = new TcpServerViewModel(_net);
         UdpVm       = new UdpViewModel(_net);
+        UartVm      = new UartViewModel(_net);
         SendVm      = new SendViewModel(_net);
 
         _logSub   = _net.LogStream.Subscribe(OnLogEntry);
@@ -73,6 +74,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public TcpClientViewModel TcpClientVm { get; }
     public TcpServerViewModel TcpServerVm { get; }
     public UdpViewModel       UdpVm       { get; }
+    public UartViewModel      UartVm      { get; }
     public SendViewModel      SendVm      { get; }
 
     // --- Traffic Log ---
@@ -141,7 +143,12 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         {
             Set(ref _selectedTabIndex, value);
             // タブに応じてSendVMのプロトコルを自動切替
-            SendVm.Protocol = value == 2 ? Protocol.UDP : Protocol.TCP;
+            SendVm.Protocol = value switch
+            {
+                2 => Protocol.UDP,
+                3 => Protocol.UART,
+                _ => Protocol.TCP,
+            };
             // TCP Server タブ選択時はセッション選択を TargetId に反映、それ以外はクリア
             SendVm.TargetId = value == 1 ? (TcpServerVm.SelectedSession ?? "") : "";
         }
@@ -260,6 +267,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
                 case "TCP Client": TcpClientVm.UpdateState(state); break;
                 case "TCP Server": TcpServerVm.UpdateState(state); break;
                 case "UDP":        UdpVm.UpdateState(state);       break;
+                case "UART":       UartVm.UpdateState(state);      break;
             }
         });
     }
@@ -339,6 +347,14 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         UdpVm.RecvBufSize = s.UdpRecvBuf;
         UdpVm.SendBufSize = s.UdpSendBuf;
 
+        if (!string.IsNullOrEmpty(s.UartPortName)) UartVm.PortName = s.UartPortName;
+        UartVm.BaudRate  = s.UartBaudRate;
+        UartVm.DataBits  = s.UartDataBits;
+        UartVm.Parity    = s.UartParity;
+        UartVm.StopBits  = s.UartStopBits;
+        UartVm.Handshake = s.UartHandshake;
+        UartVm.ChunkMode = s.UartChunkMode;
+
         SendVm.SendMode          = s.SendMode;
         SendVm.TextInput         = s.SendTextInput;
         SendVm.HexInput          = s.SendHexInput;
@@ -391,6 +407,14 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         UdpRemotePort = UdpVm.RemotePort,
         UdpRecvBuf    = UdpVm.RecvBufSize,
         UdpSendBuf    = UdpVm.SendBufSize,
+
+        UartPortName  = UartVm.PortName,
+        UartBaudRate  = UartVm.BaudRate,
+        UartDataBits  = UartVm.DataBits,
+        UartParity    = UartVm.Parity,
+        UartStopBits  = UartVm.StopBits,
+        UartHandshake = UartVm.Handshake,
+        UartChunkMode = UartVm.ChunkMode,
 
         SendMode           = SendVm.SendMode,
         SendTextInput      = SendVm.TextInput,
