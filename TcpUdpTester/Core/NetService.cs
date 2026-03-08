@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Reactive.Subjects;
+using System.Text;
 using TcpUdpTester.Core.Chunkers;
 using TcpUdpTester.Models;
 
@@ -72,41 +73,53 @@ public sealed class NetService : INetService, IDisposable
     // ============================================================
     // TCP Client
     // ============================================================
-    public async Task TcpClientConnectAsync(string host, int port, ChunkMode chunkMode = ChunkMode.Raw)
+    public async Task TcpClientConnectAsync(string host, int port, ChunkMode chunkMode = ChunkMode.Raw, SocketOptions? socketOpts = null)
     {
         await TcpClientDisconnectAsync();
 
         _tcpClientSessionId = GenerateSessionId();
         _tcpClientRemote = $"{host}:{port}";
         _tcpClient = new TcpClient();
+        if (socketOpts?.RecvBufSize > 0) _tcpClient.ReceiveBufferSize = socketOpts.RecvBufSize;
+        if (socketOpts?.SendBufSize > 0) _tcpClient.SendBufferSize    = socketOpts.SendBufSize;
 
         _stateSubject.OnNext(new StateSnapshot("TCP Client", "Connecting", _tcpClientSessionId, _tcpClientRemote));
         try
         {
             await _tcpClient.ConnectAsync(host, port);
             _stateSubject.OnNext(new StateSnapshot("TCP Client", "Connected", _tcpClientSessionId, _tcpClientRemote));
+            EmitEvent(Protocol.TCP, _tcpClientSessionId, _tcpClientRemote, $"[接続]");
 
             _tcpClientCts = new CancellationTokenSource();
             _ = Task.Run(() => TcpReceiveLoopAsync(
                 _tcpClient, _tcpClientSessionId, _tcpClientRemote,
-                CreateChunker(chunkMode), _tcpClientCts.Token));
+                CreateChunker(chunkMode), socketOpts?.RecvBufSize ?? 0, _tcpClientCts.Token));
         }
         catch (Exception ex)
         {
             Interlocked.Increment(ref _errorCount);
             _stateSubject.OnNext(new StateSnapshot("TCP Client", $"Error: {ex.Message}", _tcpClientSessionId, _tcpClientRemote));
+            EmitEvent(Protocol.TCP, _tcpClientSessionId, _tcpClientRemote, $"[エラー] {ex.Message}");
             _tcpClient.Dispose();
             _tcpClient = null;
+            _tcpClientSessionId = "";
+            _tcpClientRemote = "";
         }
     }
 
     public async Task TcpClientDisconnectAsync()
     {
+        var sessionId = _tcpClientSessionId;
+        var remote = _tcpClientRemote;
         _tcpClientCts?.Cancel();
         _tcpClient?.Close();
         _tcpClient?.Dispose();
         _tcpClient = null;
         _tcpClientCts = null;
+        _tcpClientSessionId = "";
+        _tcpClientRemote = "";
+        if (!string.IsNullOrEmpty(sessionId))
+            EmitEvent(Protocol.TCP, sessionId, remote, "[切断]");
         _stateSubject.OnNext(new StateSnapshot("TCP Client", "Disconnected", "", ""));
         await Task.CompletedTask;
     }
@@ -114,7 +127,7 @@ public sealed class NetService : INetService, IDisposable
     // ============================================================
     // TCP Server
     // ============================================================
-    public async Task TcpServerStartAsync(string bindIp, int port, ChunkMode chunkMode = ChunkMode.Raw)
+    public async Task TcpServerStartAsync(string bindIp, int port, ChunkMode chunkMode = ChunkMode.Raw, SocketOptions? socketOpts = null)
     {
         await TcpServerStopAsync();
 
@@ -122,10 +135,12 @@ public sealed class NetService : INetService, IDisposable
         _tcpListener = new TcpListener(ip, port);
         _tcpListener.Start();
         _tcpServerCts = new CancellationTokenSource();
-        _ = Task.Run(() => AcceptLoopAsync(chunkMode, _tcpServerCts.Token));
+        _ = Task.Run(() => AcceptLoopAsync(chunkMode, socketOpts, _tcpServerCts.Token));
 
         var bindDisplay = string.IsNullOrWhiteSpace(bindIp) ? "0.0.0.0" : bindIp;
-        _stateSubject.OnNext(new StateSnapshot("TCP Server", "Listening", "", $"{bindDisplay}:{port}"));
+        var listenAddr = $"{bindDisplay}:{port}";
+        _stateSubject.OnNext(new StateSnapshot("TCP Server", "Listening", "", listenAddr));
+        EmitEvent(Protocol.TCP, "", listenAddr, $"[サーバー起動] {listenAddr}");
     }
 
     public async Task TcpServerStopAsync()
@@ -143,42 +158,51 @@ public sealed class NetService : INetService, IDisposable
         _serverSessions.Clear();
 
         _stateSubject.OnNext(new StateSnapshot("TCP Server", "Stopped", "", ""));
+        EmitEvent(Protocol.TCP, "", "", "[サーバー停止]");
         await Task.CompletedTask;
     }
 
-    private async Task AcceptLoopAsync(ChunkMode chunkMode, CancellationToken ct)
+    private async Task AcceptLoopAsync(ChunkMode chunkMode, SocketOptions? socketOpts, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 var client = await _tcpListener!.AcceptTcpClientAsync(ct);
+                if (socketOpts?.RecvBufSize > 0) client.ReceiveBufferSize = socketOpts.RecvBufSize;
+                if (socketOpts?.SendBufSize > 0) client.SendBufferSize    = socketOpts.SendBufSize;
                 var sessionId = GenerateSessionId();
                 var remote = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 _serverSessions[sessionId] = (client, cts);
                 _stateSubject.OnNext(new StateSnapshot("TCP Server", $"Client connected", sessionId, remote));
-                _ = Task.Run(() => TcpReceiveLoopAsync(client, sessionId, remote, CreateChunker(chunkMode), cts.Token));
+                EmitEvent(Protocol.TCP, sessionId, remote, $"[クライアント接続]");
+                _ = Task.Run(() => TcpReceiveLoopAsync(client, sessionId, remote, CreateChunker(chunkMode), socketOpts?.RecvBufSize ?? 0, cts.Token));
             }
             catch (OperationCanceledException) { break; }
-            catch
+            catch (Exception ex)
             {
-                if (!ct.IsCancellationRequested) Interlocked.Increment(ref _errorCount);
+                if (!ct.IsCancellationRequested)
+                {
+                    Interlocked.Increment(ref _errorCount);
+                    EmitEvent(Protocol.TCP, "", "", $"[エラー] Accept失敗: {ex.Message}");
+                }
             }
         }
     }
 
     private async Task TcpReceiveLoopAsync(
-        TcpClient client, string sessionId, string remote, IChunker chunker, CancellationToken ct)
+        TcpClient client, string sessionId, string remote, IChunker chunker, int recvBufSize, CancellationToken ct)
     {
+        bool remoteDisconnected = false;
         try
         {
             var stream = client.GetStream();
-            var buf = new byte[65536];
+            var buf = new byte[recvBufSize > 0 ? recvBufSize : 65536];
             while (!ct.IsCancellationRequested)
             {
                 int read = await stream.ReadAsync(buf.AsMemory(0, buf.Length), ct);
-                if (read == 0) break;
+                if (read == 0) { remoteDisconnected = true; break; }
                 foreach (var chunk in chunker.Push(buf.AsSpan(0, read)))
                     EmitRx(Protocol.TCP, sessionId, remote, chunk);
             }
@@ -186,13 +210,22 @@ public sealed class NetService : INetService, IDisposable
                 EmitRx(Protocol.TCP, sessionId, remote, chunk);
         }
         catch (OperationCanceledException) { }
-        catch { Interlocked.Increment(ref _errorCount); }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref _errorCount);
+            EmitEvent(Protocol.TCP, sessionId, remote, $"[エラー] {ex.Message}");
+        }
         finally
         {
             if (_serverSessions.TryRemove(sessionId, out var s))
             {
                 s.Client.Dispose();
                 _stateSubject.OnNext(new StateSnapshot("TCP Server", "Client disconnected", sessionId, remote));
+                EmitEvent(Protocol.TCP, sessionId, remote, remoteDisconnected ? "[クライアント切断] 接続が閉じられました" : "[クライアント切断]");
+            }
+            else if (remoteDisconnected)
+            {
+                EmitEvent(Protocol.TCP, sessionId, remote, "[切断] リモートが接続を切断しました");
             }
         }
     }
@@ -200,15 +233,19 @@ public sealed class NetService : INetService, IDisposable
     // ============================================================
     // UDP
     // ============================================================
-    public async Task UdpStartAsync(int localPort, string remoteHost, int remotePort)
+    public async Task UdpStartAsync(int localPort, string remoteHost, int remotePort, SocketOptions? socketOpts = null)
     {
         await UdpStopAsync();
         _udpRemoteHost = remoteHost;
         _udpRemotePort = remotePort;
         _udpClient = new UdpClient(localPort);
+        if (socketOpts?.RecvBufSize > 0) _udpClient.Client.ReceiveBufferSize = socketOpts.RecvBufSize;
+        if (socketOpts?.SendBufSize > 0) _udpClient.Client.SendBufferSize    = socketOpts.SendBufSize;
         _udpCts = new CancellationTokenSource();
         _ = Task.Run(() => UdpReceiveLoopAsync(_udpCts.Token));
-        _stateSubject.OnNext(new StateSnapshot("UDP", "Active", "", $"Local:{localPort} Remote:{remoteHost}:{remotePort}"));
+        var udpInfo = $"Local:{localPort} Remote:{remoteHost}:{remotePort}";
+        _stateSubject.OnNext(new StateSnapshot("UDP", "Active", "", udpInfo));
+        EmitEvent(Protocol.UDP, "", $":{localPort}", $"[UDP 開始] {udpInfo}");
         await Task.CompletedTask;
     }
 
@@ -219,6 +256,7 @@ public sealed class NetService : INetService, IDisposable
         _udpClient?.Dispose();
         _udpClient = null;
         _stateSubject.OnNext(new StateSnapshot("UDP", "Stopped", "", ""));
+        EmitEvent(Protocol.UDP, "", "", "[UDP 停止]");
         await Task.CompletedTask;
     }
 
@@ -234,7 +272,11 @@ public sealed class NetService : INetService, IDisposable
             }
         }
         catch (OperationCanceledException) { }
-        catch { Interlocked.Increment(ref _errorCount); }
+        catch (Exception ex)
+        {
+            Interlocked.Increment(ref _errorCount);
+            EmitEvent(Protocol.UDP, "", "", $"[エラー] {ex.Message}");
+        }
     }
 
     // ============================================================
@@ -314,9 +356,10 @@ public sealed class NetService : INetService, IDisposable
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
             Interlocked.Increment(ref _errorCount);
+            EmitEvent(protocol, targetId, "", $"[送信エラー] {ex.Message}");
         }
     }
 
@@ -337,6 +380,13 @@ public sealed class NetService : INetService, IDisposable
         _logSubject.OnNext(entry);
         Interlocked.Add(ref _txBytes, data.Length);
         Interlocked.Increment(ref _txCount);
+    }
+
+    private void EmitEvent(Protocol protocol, string sessionId, string remote, string message)
+    {
+        var data = Encoding.UTF8.GetBytes(message);
+        var entry = new LogEntry(DateTimeOffset.UtcNow, protocol, Direction.Event, sessionId, remote, 0, data);
+        _logSubject.OnNext(entry);
     }
 
     public IReadOnlyList<string> GetActiveSessions()

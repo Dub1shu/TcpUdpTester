@@ -26,9 +26,10 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
         "NetTestConsole", "Logs");
     private string _filterText = "";
-    private bool   _filterTx   = true;
-    private bool   _filterRx   = true;
-    private bool   _filterGap  = true;
+    private bool   _filterTx    = true;
+    private bool   _filterRx    = true;
+    private bool   _filterGap   = true;
+    private bool   _filterEvent = true;
     private TrafficEntryViewModel? _selectedEntry;
     private int    _selectedTabIndex;
     private bool   _seqCheckEnabled;
@@ -125,6 +126,11 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     {
         get => _filterGap;
         set { Set(ref _filterGap, value); ApplyFilter(); }
+    }
+    public bool FilterEvent
+    {
+        get => _filterEvent;
+        set { Set(ref _filterEvent, value); ApplyFilter(); }
     }
 
     // --- Tab ---
@@ -256,11 +262,12 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
 
     private bool Matches(TrafficEntryViewModel vm)
     {
-        if (!FilterGap && vm.DirectionEnum == Direction.Gap) return false;
-        if (!FilterTx  && vm.DirectionEnum == Direction.TX)  return false;
-        if (!FilterRx  && vm.DirectionEnum == Direction.RX)  return false;
-        // Gap エントリはテキストフィルタを適用しない（欠落メッセージは常に表示）
-        if (vm.DirectionEnum != Direction.Gap &&
+        if (!FilterGap   && vm.DirectionEnum == Direction.Gap)   return false;
+        if (!FilterTx    && vm.DirectionEnum == Direction.TX)    return false;
+        if (!FilterRx    && vm.DirectionEnum == Direction.RX)    return false;
+        if (!FilterEvent && vm.DirectionEnum == Direction.Event) return false;
+        // Gap/Event エントリはテキストフィルタを適用しない
+        if (vm.DirectionEnum != Direction.Gap && vm.DirectionEnum != Direction.Event &&
             !string.IsNullOrEmpty(FilterText) &&
             !vm.Remote.Contains(FilterText, StringComparison.OrdinalIgnoreCase) &&
             !vm.Session.Contains(FilterText, StringComparison.OrdinalIgnoreCase) &&
@@ -310,17 +317,23 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         LogEnabled       = s.LogEnabled;
         if (!string.IsNullOrEmpty(s.LogFolder)) LogFolder = s.LogFolder;
 
-        TcpClientVm.Host      = s.TcpClientHost;
-        TcpClientVm.Port      = s.TcpClientPort;
-        TcpClientVm.ChunkMode = s.TcpClientChunkMode;
+        TcpClientVm.Host        = s.TcpClientHost;
+        TcpClientVm.Port        = s.TcpClientPort;
+        TcpClientVm.ChunkMode   = s.TcpClientChunkMode;
+        TcpClientVm.RecvBufSize = s.TcpClientRecvBuf;
+        TcpClientVm.SendBufSize = s.TcpClientSendBuf;
 
-        TcpServerVm.BindIp    = s.TcpServerBindIp;
-        TcpServerVm.Port      = s.TcpServerPort;
-        TcpServerVm.ChunkMode = s.TcpServerChunkMode;
+        TcpServerVm.BindIp      = s.TcpServerBindIp;
+        TcpServerVm.Port        = s.TcpServerPort;
+        TcpServerVm.ChunkMode   = s.TcpServerChunkMode;
+        TcpServerVm.RecvBufSize = s.TcpServerRecvBuf;
+        TcpServerVm.SendBufSize = s.TcpServerSendBuf;
 
-        UdpVm.LocalPort  = s.UdpLocalPort;
-        UdpVm.RemoteHost = s.UdpRemoteHost;
-        UdpVm.RemotePort = s.UdpRemotePort;
+        UdpVm.LocalPort   = s.UdpLocalPort;
+        UdpVm.RemoteHost  = s.UdpRemoteHost;
+        UdpVm.RemotePort  = s.UdpRemotePort;
+        UdpVm.RecvBufSize = s.UdpRecvBuf;
+        UdpVm.SendBufSize = s.UdpSendBuf;
 
         SendVm.SendMode          = s.SendMode;
         SendVm.TextInput         = s.SendTextInput;
@@ -360,14 +373,20 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         TcpClientHost      = TcpClientVm.Host,
         TcpClientPort      = TcpClientVm.Port,
         TcpClientChunkMode = TcpClientVm.ChunkMode,
+        TcpClientRecvBuf   = TcpClientVm.RecvBufSize,
+        TcpClientSendBuf   = TcpClientVm.SendBufSize,
 
         TcpServerBindIp    = TcpServerVm.BindIp,
         TcpServerPort      = TcpServerVm.Port,
         TcpServerChunkMode = TcpServerVm.ChunkMode,
+        TcpServerRecvBuf   = TcpServerVm.RecvBufSize,
+        TcpServerSendBuf   = TcpServerVm.SendBufSize,
 
         UdpLocalPort  = UdpVm.LocalPort,
         UdpRemoteHost = UdpVm.RemoteHost,
         UdpRemotePort = UdpVm.RemotePort,
+        UdpRecvBuf    = UdpVm.RecvBufSize,
+        UdpSendBuf    = UdpVm.SendBufSize,
 
         SendMode           = SendVm.SendMode,
         SendTextInput      = SendVm.TextInput,

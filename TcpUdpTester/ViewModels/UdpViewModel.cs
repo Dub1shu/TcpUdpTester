@@ -11,6 +11,8 @@ public sealed class UdpViewModel : ViewModelBase
     private string _remotePort = "9090";
     private string _status     = "Stopped";
     private bool   _isActive;
+    private string _recvBufSize = "0";
+    private string _sendBufSize = "0";
 
     public UdpViewModel(INetService net)
     {
@@ -23,6 +25,8 @@ public sealed class UdpViewModel : ViewModelBase
     public string RemoteHost { get => _remoteHost; set => Set(ref _remoteHost, value); }
     public string RemotePort { get => _remotePort; set => Set(ref _remotePort, value); }
     public string Status     { get => _status;     set => Set(ref _status, value); }
+    public string RecvBufSize { get => _recvBufSize; set => Set(ref _recvBufSize, value); }
+    public string SendBufSize { get => _sendBufSize; set => Set(ref _sendBufSize, value); }
     public bool IsActive
     {
         get => _isActive;
@@ -41,7 +45,9 @@ public sealed class UdpViewModel : ViewModelBase
     {
         if (!int.TryParse(LocalPort, out int local)) return;
         int.TryParse(RemotePort, out int remote);
-        await _net.UdpStartAsync(local, RemoteHost, remote);
+        int.TryParse(RecvBufSize, out int rcv);
+        int.TryParse(SendBufSize, out int snd);
+        await _net.UdpStartAsync(local, RemoteHost, remote, new Models.SocketOptions(rcv, snd));
     }
 
     private async Task StopAsync()

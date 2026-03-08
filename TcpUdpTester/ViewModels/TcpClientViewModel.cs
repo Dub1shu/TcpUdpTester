@@ -11,6 +11,8 @@ public sealed class TcpClientViewModel : ViewModelBase
     private string _status = "Disconnected";
     private bool _isConnected;
     private ChunkMode _chunkMode = ChunkMode.Raw;
+    private string _recvBufSize = "0";
+    private string _sendBufSize = "0";
 
     public TcpClientViewModel(INetService net)
     {
@@ -38,6 +40,8 @@ public sealed class TcpClientViewModel : ViewModelBase
     }
     public ChunkMode ChunkMode { get => _chunkMode; set => Set(ref _chunkMode, value); }
     public IReadOnlyList<ChunkMode> ChunkModes { get; } = Enum.GetValues<ChunkMode>().ToList();
+    public string RecvBufSize { get => _recvBufSize; set => Set(ref _recvBufSize, value); }
+    public string SendBufSize { get => _sendBufSize; set => Set(ref _sendBufSize, value); }
 
     public RelayCommand ConnectCommand    { get; }
     public RelayCommand DisconnectCommand { get; }
@@ -45,8 +49,10 @@ public sealed class TcpClientViewModel : ViewModelBase
     private async Task ConnectAsync()
     {
         if (!int.TryParse(Port, out int port)) return;
+        int.TryParse(RecvBufSize, out int rcv);
+        int.TryParse(SendBufSize, out int snd);
         Status = "Connecting...";
-        await _net.TcpClientConnectAsync(Host, port, ChunkMode);
+        await _net.TcpClientConnectAsync(Host, port, ChunkMode, new Models.SocketOptions(rcv, snd));
     }
 
     private async Task DisconnectAsync()

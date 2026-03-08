@@ -172,6 +172,8 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <Label Grid.Row="0" Grid.Column="0" Content="ホスト:"/>
                                         <TextBox Grid.Row="0" Grid.Column="1"
@@ -183,8 +185,16 @@
                                         <ComboBox Grid.Row="2" Grid.Column="1"
                                                   ItemsSource="{Binding TcpClientVm.ChunkModes}"
                                                   SelectedItem="{Binding TcpClientVm.ChunkMode}"/>
-                                        <Label Grid.Row="3" Grid.Column="0" Content="状態:"/>
-                                        <TextBlock Grid.Row="3" Grid.Column="1"
+                                        <Label Grid.Row="3" Grid.Column="0" Content="受信BUF(B):"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1"
+                                                 Text="{Binding TcpClientVm.RecvBufSize, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="TCPウィンドウサイズ (SO_RCVBUF)。0=OS既定 (通常 65536 B / 64 KB)"/>
+                                        <Label Grid.Row="4" Grid.Column="0" Content="送信BUF(B):"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1"
+                                                 Text="{Binding TcpClientVm.SendBufSize, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="TCPウィンドウサイズ (SO_SNDBUF)。0=OS既定 (通常 65536 B / 64 KB)"/>
+                                        <Label Grid.Row="5" Grid.Column="0" Content="状態:"/>
+                                        <TextBlock Grid.Row="5" Grid.Column="1"
                                                    Text="{Binding TcpClientVm.Status}"
                                                    VerticalAlignment="Center" Margin="4,0"
                                                    FontWeight="Bold"/>
@@ -213,6 +223,8 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <Label Grid.Row="0" Grid.Column="0" Content="バインドIP:"/>
                                         <TextBox Grid.Row="0" Grid.Column="1"
@@ -225,8 +237,16 @@
                                         <ComboBox Grid.Row="2" Grid.Column="1"
                                                   ItemsSource="{Binding TcpServerVm.ChunkModes}"
                                                   SelectedItem="{Binding TcpServerVm.ChunkMode}"/>
-                                        <Label Grid.Row="3" Grid.Column="0" Content="状態:"/>
-                                        <TextBlock Grid.Row="3" Grid.Column="1"
+                                        <Label Grid.Row="3" Grid.Column="0" Content="受信BUF(B):"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1"
+                                                 Text="{Binding TcpServerVm.RecvBufSize, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="TCPウィンドウサイズ (SO_RCVBUF)。0=OS既定 (通常 65536 B / 64 KB)"/>
+                                        <Label Grid.Row="4" Grid.Column="0" Content="送信BUF(B):"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1"
+                                                 Text="{Binding TcpServerVm.SendBufSize, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="TCPウィンドウサイズ (SO_SNDBUF)。0=OS既定 (通常 65536 B / 64 KB)"/>
+                                        <Label Grid.Row="5" Grid.Column="0" Content="状態:"/>
+                                        <TextBlock Grid.Row="5" Grid.Column="1"
                                                    Text="{Binding TcpServerVm.Status}"
                                                    VerticalAlignment="Center" Margin="4,0"
                                                    FontWeight="Bold"/>
@@ -264,6 +284,8 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <Label Grid.Row="0" Grid.Column="0" Content="ローカルポート:"/>
                                         <TextBox Grid.Row="0" Grid.Column="1"
@@ -274,8 +296,16 @@
                                         <Label Grid.Row="2" Grid.Column="0" Content="リモートポート:"/>
                                         <TextBox Grid.Row="2" Grid.Column="1"
                                                  Text="{Binding UdpVm.RemotePort, UpdateSourceTrigger=PropertyChanged}"/>
-                                        <Label Grid.Row="3" Grid.Column="0" Content="状態:"/>
-                                        <TextBlock Grid.Row="3" Grid.Column="1"
+                                        <Label Grid.Row="3" Grid.Column="0" Content="受信BUF(B):"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1"
+                                                 Text="{Binding UdpVm.RecvBufSize, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="UDPソケット受信バッファ (SO_RCVBUF)。0=OS既定 (通常 65536 B / 64 KB)"/>
+                                        <Label Grid.Row="4" Grid.Column="0" Content="送信BUF(B):"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1"
+                                                 Text="{Binding UdpVm.SendBufSize, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="UDPソケット送信バッファ (SO_SNDBUF)。0=OS既定 (通常 65536 B / 64 KB)"/>
+                                        <Label Grid.Row="5" Grid.Column="0" Content="状態:"/>
+                                        <TextBlock Grid.Row="5" Grid.Column="1"
                                                    Text="{Binding UdpVm.Status}"
                                                    VerticalAlignment="Center" Margin="4,0"
                                                    FontWeight="Bold"/>
@@ -314,6 +344,9 @@
                             <CheckBox Content="GAP" IsChecked="{Binding FilterGap}"
                                       Foreground="#BF360C" FontWeight="Bold"
                                       ToolTip="連番欠落エントリの表示/非表示"/>
+                            <CheckBox Content="EVT" IsChecked="{Binding FilterEvent}"
+                                      Foreground="#00695C" FontWeight="Bold"
+                                      ToolTip="接続・切断・エラーイベントの表示/非表示"/>
                             <TextBox Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
                                      Width="140" ToolTip="リモート・セッション・ASCIIでフィルタ"/>
                             <TextBlock Text="{Binding FilteredLog.Count, StringFormat={}({0} 件)}"
@@ -355,6 +388,10 @@
                                                     <Setter Property="Foreground" Value="#BF360C"/>
                                                     <Setter Property="FontWeight" Value="Bold"/>
                                                 </DataTrigger>
+                                                <DataTrigger Binding="{Binding Direction}" Value="EVT">
+                                                    <Setter Property="Foreground" Value="#00695C"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </DataGridTextColumn.ElementStyle>
@@ -376,6 +413,10 @@
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Direction}" Value="GAP">
                                             <Setter Property="Background" Value="#FFF3E0"/>
+                                            <Setter Property="FontStyle" Value="Italic"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Direction}" Value="EVT">
+                                            <Setter Property="Background" Value="#E0F2F1"/>
                                             <Setter Property="FontStyle" Value="Italic"/>
                                         </DataTrigger>
                                     </Style.Triggers>

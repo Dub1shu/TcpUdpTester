@@ -22,16 +22,22 @@ public sealed class AppSettings
     public string    TcpClientHost      { get; set; } = "127.0.0.1";
     public string    TcpClientPort      { get; set; } = "8080";
     public ChunkMode TcpClientChunkMode { get; set; } = ChunkMode.Raw;
+    public string    TcpClientRecvBuf   { get; set; } = "0";
+    public string    TcpClientSendBuf   { get; set; } = "0";
 
     // TCP Server
     public string    TcpServerBindIp    { get; set; } = "";
     public string    TcpServerPort      { get; set; } = "8080";
     public ChunkMode TcpServerChunkMode { get; set; } = ChunkMode.Raw;
+    public string    TcpServerRecvBuf   { get; set; } = "0";
+    public string    TcpServerSendBuf   { get; set; } = "0";
 
     // UDP
     public string UdpLocalPort  { get; set; } = "9090";
     public string UdpRemoteHost { get; set; } = "127.0.0.1";
     public string UdpRemotePort { get; set; } = "9090";
+    public string UdpRecvBuf    { get; set; } = "0";
+    public string UdpSendBuf    { get; set; } = "0";
 
     // Send panel
     public SendMode SendMode           { get; set; } = SendMode.Text;

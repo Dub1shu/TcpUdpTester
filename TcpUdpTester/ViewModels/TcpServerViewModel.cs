@@ -13,6 +13,8 @@ public sealed class TcpServerViewModel : ViewModelBase
     private bool _isListening;
     private ChunkMode _chunkMode = ChunkMode.Raw;
     private string? _selectedSession;
+    private string _recvBufSize = "0";
+    private string _sendBufSize = "0";
 
     public TcpServerViewModel(INetService net)
     {
@@ -36,6 +38,8 @@ public sealed class TcpServerViewModel : ViewModelBase
     }
     public ChunkMode ChunkMode { get => _chunkMode; set => Set(ref _chunkMode, value); }
     public IReadOnlyList<ChunkMode> ChunkModes { get; } = Enum.GetValues<ChunkMode>().ToList();
+    public string RecvBufSize { get => _recvBufSize; set => Set(ref _recvBufSize, value); }
+    public string SendBufSize { get => _sendBufSize; set => Set(ref _sendBufSize, value); }
 
     public ObservableCollection<string> Sessions { get; } = [];
     public string? SelectedSession { get => _selectedSession; set => Set(ref _selectedSession, value); }
@@ -46,7 +50,9 @@ public sealed class TcpServerViewModel : ViewModelBase
     private async Task StartAsync()
     {
         if (!int.TryParse(Port, out int port)) return;
-        await _net.TcpServerStartAsync(BindIp, port, ChunkMode);
+        int.TryParse(RecvBufSize, out int rcv);
+        int.TryParse(SendBufSize, out int snd);
+        await _net.TcpServerStartAsync(BindIp, port, ChunkMode, new Models.SocketOptions(rcv, snd));
     }
 
     private async Task StopAsync()
