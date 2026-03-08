@@ -178,6 +178,9 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     // ================================================================
     // Handlers
     // ================================================================
+    // UIバッファの最大保持件数。超過分は破棄してメモリ増加を防ぐ
+    private const int LogBufferCapacity = 10_000;
+
     private void OnLogEntry(LogEntry entry)
     {
         _logWriter.Enqueue(entry);
@@ -188,7 +191,8 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
             _ = _net.SendAsync(req);
         }
 
-        _logBuffer.Enqueue(entry);
+        if (_logBuffer.Count < LogBufferCapacity)
+            _logBuffer.Enqueue(entry);
     }
 
     // DispatcherTimer (Background priority, 50ms) で一括フラッシュ

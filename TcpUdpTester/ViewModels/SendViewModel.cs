@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Windows;
 using TcpUdpTester.Core;
 using TcpUdpTester.Models;
 
@@ -217,23 +218,28 @@ public sealed class SendViewModel : ViewModelBase
             long packetCount = 0;
             long lastUpdateMs = 0;
 
-            while (!ct.IsCancellationRequested)
+            // UIスレッドを解放するため Task.Run でループをThreadPoolへ移す
+            await Task.Run(async () =>
             {
-                var data = needsPerIter ? BuildIterData(baseData) : baseData!;
-                await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts));
-                totalBytes  += data.Length;
-                packetCount++;
-
-                long elapsedMs = sw.ElapsedMilliseconds;
-                if (elapsedMs - lastUpdateMs >= 200)
+                while (!ct.IsCancellationRequested)
                 {
-                    lastUpdateMs = elapsedMs;
-                    SendStatus = $"繰り返し送信中... {packetCount} pkts / {totalBytes:N0} B";
-                }
+                    var data = needsPerIter ? BuildIterData(baseData) : baseData!;
+                    await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts));
+                    totalBytes  += data.Length;
+                    packetCount++;
 
-                if (RepeatIntervalMs > 0)
-                    await Task.Delay(RepeatIntervalMs, ct);
-            }
+                    long elapsedMs = sw.ElapsedMilliseconds;
+                    if (elapsedMs - lastUpdateMs >= 200)
+                    {
+                        lastUpdateMs = elapsedMs;
+                        var status = $"繰り返し送信中... {packetCount} pkts / {totalBytes:N0} B";
+                        Application.Current?.Dispatcher.InvokeAsync(() => SendStatus = status);
+                    }
+
+                    if (RepeatIntervalMs > 0)
+                        await Task.Delay(RepeatIntervalMs, ct);
+                }
+            }, ct);
             return;
         }
 
@@ -261,15 +267,18 @@ public sealed class SendViewModel : ViewModelBase
 
         SendStatus = "送信中...";
         int totalBytes2 = 0;
-        for (int r = 0; r < count; r++)
+        await Task.Run(async () =>
         {
-            ct.ThrowIfCancellationRequested();
-            var data = BuildIterData(baseData2);
-            await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts2));
-            totalBytes2 += data.Length;
-            if (r < count - 1 && opts.RepeatIntervalMs > 0)
-                await Task.Delay(opts.RepeatIntervalMs, ct);
-        }
+            for (int r = 0; r < count; r++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var data = BuildIterData(baseData2);
+                await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts2));
+                totalBytes2 += data.Length;
+                if (r < count - 1 && opts.RepeatIntervalMs > 0)
+                    await Task.Delay(opts.RepeatIntervalMs, ct);
+            }
+        }, ct);
         SendStatus = $"送信完了  {totalBytes2} bytes";
     }
 
@@ -294,39 +303,44 @@ public sealed class SendViewModel : ViewModelBase
         long packetCount  = 0;
         long lastUpdateMs = 0;
 
-        while (!ct.IsCancellationRequested)
+        // UIスレッドを解放するため Task.Run でループをThreadPoolへ移す
+        await Task.Run(async () =>
         {
-            // Duration check
-            if (!LoadTestInfinite && LoadTestDurationSec > 0 && sw.Elapsed.TotalSeconds >= LoadTestDurationSec)
-                break;
-
-            // Rate limiting: if we're ahead of target, wait
-            if (targetBytesPerSec > 0 && totalBytes > 0)
+            while (!ct.IsCancellationRequested)
             {
-                double expectedBytes = sw.Elapsed.TotalSeconds * targetBytesPerSec;
-                double excessBytes   = totalBytes - expectedBytes;
-                if (excessBytes > 0)
+                // Duration check
+                if (!LoadTestInfinite && LoadTestDurationSec > 0 && sw.Elapsed.TotalSeconds >= LoadTestDurationSec)
+                    break;
+
+                // Rate limiting: if we're ahead of target, wait
+                if (targetBytesPerSec > 0 && totalBytes > 0)
                 {
-                    int waitMs = (int)(excessBytes / targetBytesPerSec * 1000);
-                    if (waitMs > 0)
-                        await Task.Delay(waitMs, ct);
+                    double expectedBytes = sw.Elapsed.TotalSeconds * targetBytesPerSec;
+                    double excessBytes   = totalBytes - expectedBytes;
+                    if (excessBytes > 0)
+                    {
+                        int waitMs = (int)(excessBytes / targetBytesPerSec * 1000);
+                        if (waitMs > 0)
+                            await Task.Delay(waitMs, ct);
+                    }
+                }
+
+                var data = BuildIterData(baseData);
+                await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts));
+                totalBytes  += data.Length;
+                packetCount++;
+
+                // Update status ~every 200ms
+                long elapsedMs = sw.ElapsedMilliseconds;
+                if (elapsedMs - lastUpdateMs >= 200)
+                {
+                    lastUpdateMs = elapsedMs;
+                    double kbps = elapsedMs > 0 ? totalBytes * 8.0 / elapsedMs : 0;
+                    var status = $"負荷送信中... {packetCount} pkts / {totalBytes:N0} B / {kbps:N0} kbps";
+                    Application.Current?.Dispatcher.InvokeAsync(() => SendStatus = status);
                 }
             }
-
-            var data = BuildIterData(baseData);
-            await _net.SendAsync(new SendRequest(Protocol, TargetId, data, singleOpts));
-            totalBytes  += data.Length;
-            packetCount++;
-
-            // Update status ~every 200ms
-            long elapsedMs = sw.ElapsedMilliseconds;
-            if (elapsedMs - lastUpdateMs >= 200)
-            {
-                lastUpdateMs = elapsedMs;
-                double kbps = elapsedMs > 0 ? totalBytes * 8.0 / elapsedMs : 0;
-                SendStatus = $"負荷送信中... {packetCount} pkts / {totalBytes:N0} B / {kbps:N0} kbps";
-            }
-        }
+        }, ct);
 
         double totalSec = sw.Elapsed.TotalSeconds;
         double avgKbps  = totalSec > 0 ? totalBytes * 8.0 / totalSec / 1000 : 0;
